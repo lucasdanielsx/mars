@@ -1,35 +1,27 @@
 # For more information: https://laravel.com/docs/sail
 version: '3'
 services:
-    laravel.test:
-        build:
-            context: ./vendor/laravel/sail/runtimes/8.0
-            dockerfile: Dockerfile
-            args:
-                WWWGROUP: '${WWWGROUP}'
-        image: sail-8.0/app
-        ports:
-            - '${APP_PORT:-80}:80'
-        environment:
-            WWWUSER: '${WWWUSER}'
-            LARAVEL_SAIL: 1
-        volumes:
-            - '.:/var/www/html'
-        networks:
-            - sail
+#    laravel.test:
+#        build:
+#            context: ./vendor/laravel/sail/runtimes/8.0
+#            dockerfile: Dockerfile
+#            args:
+#                WWWGROUP: '${WWWGROUP}'
+#        image: sail-8.0/app
+#        ports:
+#            - '${APP_PORT:-80}:80'
+#        environment:
+#            WWWUSER: '${WWWUSER}'
+#            LARAVEL_SAIL: 1
+#        volumes:
+#            - '.:/var/www/html'
+#        networks:
+#            - sail
 #        depends_on:
 #            - mysql
 #            - redis
 #            - meilisearch
 #            - selenium
-    postgres:
-        image: postgres:13.3-alpine
-        ports:
-            - "5432:5432"
-        environment:
-            - POSTGRES_USER=root
-            - POSTGRES_PASSWORD=root
-            - POSTGRES_DB=db_mars
 #    mysql:
 #        image: 'mysql:8.0'
 #        ports:
@@ -85,6 +77,14 @@ services:
 #            - '/dev/shm:/dev/shm'
 #       networks:
 #           - sail
+    postgres:
+        image: postgres:13.3-alpine
+        ports:
+            - "5432:5432"
+        environment:
+            - POSTGRES_USER=root
+            - POSTGRES_PASSWORD=root
+            - POSTGRES_DB=db_mars
 networks:
     sail:
         driver: bridge
