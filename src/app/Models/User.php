@@ -47,7 +47,8 @@ class User extends Model
         'id',
         'name',
         'email',
-        'document_value'
+        'document_value',
+        'type'
     ];
 
     /**

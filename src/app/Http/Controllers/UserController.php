@@ -15,16 +15,14 @@ class UserController extends Controller
 {
     public function store(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|max:255',
-            'email' => 'required|email',
-            'document_value' => 'required'
-        ]);
+        $validator = $this->validateRequestBody($request);
 
         if($validator->fails())
             return $this->response('', $validator->errors()->toArray(), 400);
 
-        list($user, $wallet) = $this->generateUserAndWallet($request);
+        $user = User::where('email', $request['email'])->first();
+
+        list($user, $wallet) = $this->mountUserAndWallet($request);
 
         try {
             $this->saveAll($user, $wallet);
@@ -38,6 +36,44 @@ class UserController extends Controller
     }
 
     /**
+     * @param Request $request
+     * @return \Illuminate\Contracts\Validation\Validator
+     */
+    private function validateRequestBody(Request $request): \Illuminate\Contracts\Validation\Validator
+    {
+        //TODO function to valid cpf or cnpj
+
+        return Validator::make($request->all(), [
+            'name' => 'required|max:255: ',
+            'email' => 'required|email',
+            'document_value' => 'required|integer|digits_between:11,14'
+        ]);
+    }
+
+    /**
+     * @param Request $request
+     * @return array (User, Wallet)
+     */
+    private function mountUserAndWallet(Request $request): array
+    {
+        $userId = Uuid::uuid4();
+
+        $user = new User();
+        $user->id = $userId;
+        $user->name = $request['name'];
+        $user->email = $request['email'];
+        $user->document_value = $request['document_value'];
+        $user->type = "CUSTOMER"; //TODO enum CUSTOMER, STORE
+
+        $wallet = new Wallet();
+        $wallet->id = Uuid::uuid4();
+        $wallet->fk_user_id = $userId;
+        $wallet->amount = 0;
+
+        return [$user, $wallet];
+    }
+
+    /**
      * @param User $user
      * @param Wallet $wallet
      * @return void
@@ -48,28 +84,6 @@ class UserController extends Controller
             $user->save();
             $wallet->save();
         });
-    }
-
-    /**
-     * @param Request $request
-     * @return array (User, Wallet)
-     */
-    private function generateUserAndWallet(Request $request): array
-    {
-        $userId = Uuid::uuid4();
-
-        $user = new User();
-        $user->id = $userId;
-        $user->name = $request['name'];
-        $user->email = $request['email'];
-        $user->document_value = $request['document_value'];
-
-        $wallet = new Wallet();
-        $wallet->id = Uuid::uuid4();
-        $wallet->fk_user_id = $userId;
-        $wallet->amount = 0;
-
-        return [$user, $wallet];
     }
 
     /**
