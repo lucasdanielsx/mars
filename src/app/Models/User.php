@@ -47,17 +47,14 @@ class User extends Model
         'id',
         'name',
         'email',
-        'password',
-        'document_value',
-        'created_at',
-        'updated_at'
+        'document_value'
     ];
 
     /**
      * @return HasOne
      */
-    public function wallet()
+    public function getWallet()
     {
-        return $this->hasOne(Wallet::class, 'fk_user_id', 'id');
+        return $this->hasOne(Wallet::class);
     }
 }

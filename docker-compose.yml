@@ -20,7 +20,7 @@ services:
       - '9001:9000'
     volumes:
       - ./src:/var/www
-#    command: chmod -R 777 /var/www/storage
+    #    command: chmod -R 777 /var/www/storage
     depends_on:
       - postgres
     networks:

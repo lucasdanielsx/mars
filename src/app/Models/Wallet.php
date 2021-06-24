@@ -28,7 +28,7 @@ class Wallet extends Model
         'updated_at'
     ];
 
-    public function user()
+    public function getUser()
     {
         return $this->belongsTo(User::class);
     }
