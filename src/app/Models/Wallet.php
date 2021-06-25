@@ -14,7 +14,11 @@ class Wallet extends Model
     /**
      * @var Uuid
      */
-    private $fk_user_id;
+    private $fk_wallet_from;
+    /**
+     * @var Uuid
+     */
+    private $fk_wallet_to;
     /**
      * @var int
      */
@@ -22,14 +26,19 @@ class Wallet extends Model
 
     protected $fillable = [
         'id',
-        'fk_user_id',
+        'fk_wallet_from',
+        'fk_wallet_to',
         'amount',
         'created_at',
         'updated_at'
     ];
 
-    public function getUser()
+    protected $casts = [
+        'id' => 'string'
+    ];
+
+    public function user()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'fk_user_id', 'id');
     }
 }

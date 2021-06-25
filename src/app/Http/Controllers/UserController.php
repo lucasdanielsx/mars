@@ -15,19 +15,27 @@ class UserController extends Controller
 {
     public function store(Request $request)
     {
+        Log::info('Creating a new user: ' . $request['name']);
+
         $validator = $this->validateRequestBody($request);
 
         if($validator->fails())
             return $this->response('', $validator->errors()->toArray(), 400);
 
-        $user = User::where('email', $request['email'])->first();
-
-        list($user, $wallet) = $this->mountUserAndWallet($request);
+        list($newUser, $newWallet) = $this->mountUserAndWallet($request);
 
         try {
-            $this->saveAll($user, $wallet);
+            $user = User::where('document_value', $request['document_value'])->orWhere('email', $request['email'])->first();
 
-            return $this->response('Internal server error', $user->toArray(), 201);
+            //TODO valid when are 2 lines
+            if(!empty($user))
+                return $this->response('Resource already exists', [], 409);
+
+            $this->saveAll($newUser, $newWallet);
+
+            Log::info('User ' . $request['name'] . ' was created');
+
+            return $this->response('Success', $newUser->toArray(), 201);
         } catch (\Throwable $e) {
             Log::error("Error trying save a new user. MESSAGE: " . $e->getMessage(), [$e->getTraceAsString()]);
 
@@ -44,9 +52,9 @@ class UserController extends Controller
         //TODO function to valid cpf or cnpj
 
         return Validator::make($request->all(), [
-            'name' => 'required|max:255: ',
+            'name' => 'required|max:255',
             'email' => 'required|email',
-            'document_value' => 'required|integer|digits_between:11,14'
+            'document_value' => 'required|string|between:11,14'
         ]);
     }
 

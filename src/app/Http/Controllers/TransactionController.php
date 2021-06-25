@@ -4,37 +4,105 @@ namespace App\Http\Controllers;
 
 use App\Models\Transaction;
 use App\Models\User;
+use App\Models\Wallet;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 use Ramsey\Uuid\Uuid;
 
 class TransactionController extends Controller
 {
     public function store(Request $request)
     {
-        Log::info($request);
+        Log::info('Creating a new transaction');
 
-        if($request['payer'] == $request['payee']) return (new Response(['payee' => 'invalid'], 400))->header('Content-Type', 'application/json');
-        if($request['amount'] <= 0) return (new Response(['amount' => 'invalid'], 400))->header('Content-Type', 'application/json');
+        $validator = $this->validateRequestBody($request);
 
-        $userFrom = User::where('document_value', '=', $request['payer'])->first();
-        if(empty($userFrom)) return (new Response(['payer' => 'invalid'], 400))->header('Content-Type', 'application/json');
+        if($validator->fails())
+            return $this->response('', $validator->errors()->toArray(), 400);
 
-        $userTo = User::where('document_value', '=', $request['payer'])->first();
-        if(empty($userTo)) return (new Response(['payee' => 'invalid'], 400))->header('Content-Type', 'application/json');
+        try{
+            $userFrom = $this->getUser($request['payer']);
+            if(empty($userFrom))
+                return $this->response('Payer not exist', [], 400);
 
-        Log::info($userFrom->wallet()->id);
+            if($userFrom->type != "CUSTOMER")
+                return $this->response("Payer isn't allowed to make transactions", [], 403);
 
+            $userTo = $this->getUser($request['payee']);
+            if(empty($userTo))
+                return $this->response('Payee not exist', [], 400);
+
+            $transaction = $this->mountTransaction($userFrom, $userTo, $request);
+
+            $transaction->save();
+
+            Log::info('Transaction ' . $transaction->id . ' was created');
+
+            return $this->response('Success', $transaction->toArray(), 201);
+        } catch (\Throwable $e) {
+            Log::error("Error trying create a new transaction. MESSAGE: " . $e->getMessage(), [$e->getTraceAsString()]);
+
+            return $this->response('Internal server error', [], 500);
+        }
+    }
+
+    /**
+     * @param Request $request
+     * @return \Illuminate\Contracts\Validation\Validator
+     */
+    private function validateRequestBody(Request $request): \Illuminate\Contracts\Validation\Validator
+    {
+        return Validator::make($request->all(), [
+            'payer' => 'required|string|between:11,14|different:payee',
+            'payee' => 'required|string|between:11,14',
+            'amount' => 'required|integer|min:1'
+        ]);
+    }
+
+    /**
+     * @param $payer
+     * @return mixed
+     */
+    private function getUser($payer)
+    {
+        return User::where('document_value', '=', $payer)->first();
+    }
+
+    /**
+     * @param User $userFrom
+     * @param User $userTo
+     * @param Request $request
+     * @return Transaction
+     */
+    private function mountTransaction(User $userFrom, User $userTo, Request $request): Transaction
+    {
         $transaction = new Transaction();
         $transaction->id = Uuid::uuid4();
-        $transaction->fk_wallet_from = $userFrom->wallet()->id;
-        $transaction->fk_wallet_to = $userFrom->wallet()->id;
+        $transaction->fk_wallet_from = $userFrom->wallet->id;
+        $transaction->fk_wallet_to = $userTo->wallet->id;
         $transaction->amount = $request['amount'];
         $transaction->status = 'new';
-        $transaction->payload = $request;
+        $transaction->payload = $request->getContent();
 
-        Transaction::create($transaction);
+        return $transaction;
+    }
+
+    /**
+     * @param string $message
+     * @param array $items
+     * @param int $statusCode
+     * @return Response
+     */
+    private function response(string $message, array $items, int $statusCode): Response
+    {
+        $response = new Response();
+        $response->setContent(['message' => $message, 'items' => $items, 'status' => $statusCode]);
+        $response->setStatusCode($statusCode);
+        $response->header('Content-Type', 'application/json');
+
+        return $response;
     }
 }

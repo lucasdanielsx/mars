@@ -51,11 +51,15 @@ class User extends Model
         'type'
     ];
 
+    protected $casts = [
+        'id' => 'string'
+    ];
+
     /**
      * @return HasOne
      */
-    public function getWallet()
+    public function wallet()
     {
-        return $this->hasOne(Wallet::class);
+        return $this->hasOne(Wallet::class, 'fk_user_id', 'id');
     }
 }
