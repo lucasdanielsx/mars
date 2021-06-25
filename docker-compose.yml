@@ -12,6 +12,15 @@ services:
     networks:
       - mars-network
 
+  sqs:
+    image: s12v/elasticmq
+    ports:
+      - "9324:9324"
+    volumes:
+      - ./sqs/elasticmq.conf:/etc/elasticmq/elasticmq.conf
+    networks:
+      - mars-network
+
   app:
     build:
       context: .

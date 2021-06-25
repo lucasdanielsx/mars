@@ -14,11 +14,7 @@ class Wallet extends Model
     /**
      * @var Uuid
      */
-    private $fk_wallet_from;
-    /**
-     * @var Uuid
-     */
-    private $fk_wallet_to;
+    private $fk_user_id;
     /**
      * @var int
      */
@@ -34,7 +30,8 @@ class Wallet extends Model
     ];
 
     protected $casts = [
-        'id' => 'string'
+        'id' => 'string',
+        'fk_user_id' => 'string'
     ];
 
     public function user()

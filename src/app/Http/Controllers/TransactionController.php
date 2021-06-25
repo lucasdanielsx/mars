@@ -31,6 +31,9 @@ class TransactionController extends Controller
             if($userFrom->type != "CUSTOMER")
                 return $this->response("Payer isn't allowed to make transactions", [], 403);
 
+            if($userFrom->wallet->amount <= $request['amount'])
+                return $this->response("Insufficient funds", [], 400);
+
             $userTo = $this->getUser($request['payee']);
             if(empty($userTo))
                 return $this->response('Payee not exist', [], 400);
