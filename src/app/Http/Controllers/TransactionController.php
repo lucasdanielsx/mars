@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Wallet;
+use Aws\Sqs\SqsClient;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -41,6 +42,8 @@ class TransactionController extends Controller
             $transaction = $this->mountTransaction($userFrom, $userTo, $request);
 
             $transaction->save();
+
+            $client = new SqsClient();
 
             Log::info('Transaction ' . $transaction->id . ' was created');
 
