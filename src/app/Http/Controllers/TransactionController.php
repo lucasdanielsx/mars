@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\NewTransactionJob;
+use App\Jobs\ProcessPodcast;
 use App\Models\Transaction;
 use App\Models\User;
-use App\Models\Wallet;
 use Aws\Sqs\SqsClient;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
@@ -43,7 +43,7 @@ class TransactionController extends Controller
 
             $transaction->save();
 
-            $client = new SqsClient();
+            NewTransactionJob::dispatch($transaction)->onQueue('nonexistent_subscribe');
 
             Log::info('Transaction ' . $transaction->id . ' was created');
 
