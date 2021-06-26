@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Consumers\TransactionNotPaidConsumer;
+use App\Consumers\AuthorizeTransactionConsumer;
 use App\Helpers\Sqs\SqsHelper;
 use App\Helpers\Sqs\SqsUsEast1Client;
 use App\Models\TransactionFrom;
@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use phpDocumentor\Reflection\Types\Boolean;
 use Ramsey\Uuid\Uuid;
+use Throwable;
 
 class TransactionController extends Controller
 {
@@ -152,12 +153,12 @@ class TransactionController extends Controller
             $this->saveAll($transactionFrom, $transactionTo, $userFrom);
 
             $this->publish('mars-authorize_transaction', $transactionFrom->toArray());
-            $test = new TransactionNotPaidConsumer();
+            $test = new AuthorizeTransactionConsumer();
             $test->process();
             Log::info('TransactionFrom ' . $transactionFrom->id . ' was created');
 
             return $this->response('Success', $transactionFrom->toArray(), 201);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             Log::error("Error trying create a new transaction. MESSAGE: " . $e->getMessage(), [$e->getTraceAsString()]);
 
             return $this->response('Internal server error', [], 500);

@@ -5,37 +5,20 @@ namespace App\Consumers;
 use App\Helpers\Enums\Queues;
 use App\Helpers\Sqs\SqsHelper;
 use App\Helpers\Sqs\SqsUsEast1Client;
+use App\Http\Clients\Authorizers\DefaultAuthorizerClient;
 use App\Models\Event;
 use App\Models\TransactionFrom;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Ramsey\Uuid\Uuid;
+use Throwable;
 
 class AuthorizeTransactionConsumer extends Consumer
 {
     /**
      * @param TransactionFrom $transaction
-     * @return array
-     */
-    private function authorize(TransactionFrom $transaction, string $messageId): array
-    {
-        try {
-            $response = Http::get(env('AUTHORIZER_URL'));
-
-            list($event, $queue) = $this->convertEvent($transaction, json_decode($response->body(), true), $response->status(), $messageId);
-        } catch (\Throwable $e) {
-            Log::error("Error trying authorize transaction " . $transaction->getId(), [$e->getTraceAsString()]);
-
-            list($event, $queue) = $this->convertEvent($transaction, ["error" => $e->getMessage()], 500, $messageId);
-        }
-
-        return [$event, $queue];
-    }
-
-    /**
-     * @param TransactionFrom $transaction
      * @param array $message
      * @param int $statusCode
+     * @param string $messageId
      * @return array
      */
     private function convertEvent(TransactionFrom $transaction, array $message, int $statusCode, string $messageId)
@@ -63,7 +46,10 @@ class AuthorizeTransactionConsumer extends Consumer
             try {
                 $transaction = new TransactionFrom(json_decode($message['Body'], true));
 
-                list($event, $queue) = $this->authorize($transaction, $message['MessageId']);
+                $client = new DefaultAuthorizerClient();
+                $response = $client->authorize($transaction);
+
+                list($event, $queue) = $this->convertEvent($transaction, json_decode($response->body(), true), $response->status(), $message['MessageId']);
 
                 $event->save();
 
@@ -71,7 +57,7 @@ class AuthorizeTransactionConsumer extends Consumer
                 $sqsHelper->deleteMessage(Queues::AUTHORIZE_TRANSACTION, $messages, $index);
 
                 Log::info("TransactionFrom " . $transaction->getId() . " was authorized");
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 Log::error("Error trying process transaction", [$e->getTraceAsString()]);
 
                 continue;

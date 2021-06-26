@@ -2,11 +2,11 @@
 
 namespace App\Consumers;
 
-use App\Helpers\SqsHelper;
-use App\Helpers\SqsUsEast1Client;
+use App\Helpers\Enums\Queues;
+use App\Helpers\Sqs\SqsHelper;
+use App\Helpers\Sqs\SqsUsEast1Client;
 use App\Models\Event;
 use App\Models\TransactionFrom;
-use Aws\Sqs\SqsClient;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Ramsey\Uuid\Uuid;
@@ -56,18 +56,16 @@ class TransactionPaidConsumer extends Consumer
         Log::info("Starting " . self::class . " process");
 
         $sqsHelper = new SqsHelper(new SqsUsEast1Client());
-        $messages = $sqsHelper->getMessages('mars-transaction_paid');
+        $messages = $sqsHelper->getMessages(Queues::TRANSACTION_PAID);
 
         foreach ($messages->get('Messages') as $index => $message) {
             try {
                 $transaction = new TransactionFrom(json_decode($message['Body'], true));
-                $event = null;
 
-                list($event, $queue) = $this->authorize($transaction);
                 $event->save();
 
                 $sqsHelper->sendMessage($queue, $transaction->toArray());
-                $sqsHelper->deleteMessage('mars-authorize_transaction', $messages, $index);
+                $sqsHelper->deleteMessage(Queues::TRANSACTION_PAID, $messages, $index);
 
                 Log::info("TransactionFrom " . $transaction->id . " was authorized");
             } catch (\Throwable $e) {
