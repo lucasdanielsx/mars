@@ -6,6 +6,7 @@ use App\Consumers\TransactionNotPaidConsumer;
 use App\Helpers\Sqs\SqsHelper;
 use App\Helpers\Sqs\SqsUsEast1Client;
 use App\Models\TransactionFrom;
+use App\Models\TransactionTo;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -40,14 +41,16 @@ class TransactionController extends Controller
     }
 
     /**
-     * @param TransactionFrom $transaction
+     * @param TransactionFrom $transactionFrom
+     * @param TransactionTo $transactionTo
      * @param $userFrom
      */
-    private function saveAll(TransactionFrom $transaction, $userFrom): void
+    private function saveAll(TransactionFrom $transactionFrom, TransactionTo $transactionTo, $userFrom): void
     {
-        DB::transaction(function () use ($transaction, $userFrom) {
-            $transaction->save();
-            $userFrom->wallet->amount = $userFrom->wallet->amount - $transaction->getAmount();
+        DB::transaction(function () use ($transactionFrom, $transactionTo, $userFrom) {
+            $transactionFrom->save();
+            $transactionTo->save();
+            $userFrom->wallet->amount = $userFrom->wallet->amount - $transactionFrom->getAmount();
             $userFrom->wallet->update();
         });
     }
@@ -88,19 +91,28 @@ class TransactionController extends Controller
      * @param User $userFrom
      * @param User $userTo
      * @param Request $request
-     * @return TransactionFrom
+     * @return array
      */
-    private function convertTransaction(User $userFrom, User $userTo, Request $request): TransactionFrom
+    private function convertTransaction(User $userFrom, User $userTo, Request $request): array
     {
-        $transaction = new TransactionFrom();
-        $transaction->setId(Uuid::uuid4());
-        $transaction->setFkWalletFrom($userFrom->wallet->id);
-        $transaction->setFkWalletTo($userTo->wallet->id);
-        $transaction->setAmount($request['amount']);
-        $transaction->setStatus('created');
-        $transaction->setPayload(json_decode($request->getContent(), true));
+        $transactionFromId = Uuid::uuid4();
 
-        return $transaction;
+        $transactionFrom = new TransactionFrom();
+        $transactionFrom->setId($transactionFromId);
+        $transactionFrom->setFkWalletId($userFrom->getWallet->getId());
+        $transactionFrom->setAmount($request['amount']);
+        $transactionFrom->setStatus('created');
+        $transactionFrom->setPayload(json_decode($request->getContent(), true));
+
+        $transactionTo = new TransactionTo();
+        $transactionTo->setId(Uuid::uuid4());
+        $transactionTo->setFkTransactionFromId($transactionFromId);
+        $transactionTo->setFkWalletId($userTo->getWallet->getId());
+        $transactionTo->setAmount($request['amount']);
+        $transactionTo->setStatus('created');
+        $transactionTo->setPayload(json_decode($request->getContent(), true));
+
+        return [$transactionFrom, $transactionTo];
     }
 
     /**
@@ -135,16 +147,16 @@ class TransactionController extends Controller
             if($rules instanceof Boolean)
                 return $rules;
 
-            $transaction = $this->convertTransaction($userFrom, $userTo, $request);
+            list($transactionFrom, $transactionTo) = $this->convertTransaction($userFrom, $userTo, $request);
 
-            $this->saveAll($transaction, $userFrom);
+            $this->saveAll($transactionFrom, $transactionTo, $userFrom);
 
-            $this->publish('mars-authorize_transaction', $transaction->toArray());
+            $this->publish('mars-authorize_transaction', $transactionFrom->toArray());
             $test = new TransactionNotPaidConsumer();
             $test->process();
-            Log::info('TransactionFrom ' . $transaction->id . ' was created');
+            Log::info('TransactionFrom ' . $transactionFrom->id . ' was created');
 
-            return $this->response('Success', $transaction->toArray(), 201);
+            return $this->response('Success', $transactionFrom->toArray(), 201);
         } catch (\Throwable $e) {
             Log::error("Error trying create a new transaction. MESSAGE: " . $e->getMessage(), [$e->getTraceAsString()]);
 
