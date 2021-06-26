@@ -5,9 +5,12 @@ namespace App\Models;
 use DateTime;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Ramsey\Uuid\UuidInterface;
 
-class Event extends Model
+class TransactionFrom extends Model
 {
     use HasFactory;
 
@@ -15,16 +18,16 @@ class Event extends Model
     private $id;
 
     /** @var UuidInterface */
-    private $fkTransactionFromId;
+    private $fkWalletId;
+
+    /** @var int */
+    private $amount;
 
     /** @var string */
-    private $type;
+    private $status;
 
     /** @var array */
     private $payload;
-
-    /** @var string */
-    private $messageId;
 
     /** @var DateTime */
     private $createdAt;
@@ -34,8 +37,9 @@ class Event extends Model
 
     protected $fillable = [
         "id",
-        "fk_transaction_from_id",
-        "type",
+        "fk_wallet_id",
+        "amount",
+        "status",
         "payload",
         "updated_at",
         "created_at"
@@ -43,7 +47,8 @@ class Event extends Model
 
     protected $casts = [
         'id' => 'string',
-        'fk_transaction_id' => 'string',
+        'fk_wallet_from' => 'string',
+        'fk_wallet_to' => 'string',
         'created_at' => 'datetime:Y-m-d',
         'updated_at' => 'datetime:Y-m-d'
     ];
@@ -65,35 +70,35 @@ class Event extends Model
     }
 
     /**
-     * @return UuidInterface
+     * @return int
      */
-    public function getFkTransactionFromId(): UuidInterface
+    public function getAmount(): int
     {
-        return $this->fkTransactionFromId;
+        return $this->amount;
     }
 
     /**
-     * @param UuidInterface $fkTransactionFromId
+     * @param int $amount
      */
-    public function setFkTransactionFromId(UuidInterface $fkTransactionFromId): void
+    public function setAmount(int $amount): void
     {
-        $this->fkTransactionFromId = $fkTransactionFromId;
+        $this->amount = $amount;
     }
 
     /**
      * @return string
      */
-    public function getType(): string
+    public function getStatus(): string
     {
-        return $this->type;
+        return $this->status;
     }
 
     /**
-     * @param string $type
+     * @param string $status
      */
-    public function setType(string $type): void
+    public function setStatus(string $status): void
     {
-        $this->type = $type;
+        $this->status = $status;
     }
 
     /**
@@ -145,23 +150,42 @@ class Event extends Model
     }
 
     /**
-     * @return string
+     * @return UuidInterface
      */
-    public function getMessageId(): string
+    public function getFkWalletId(): UuidInterface
     {
-        return $this->messageId;
+        return $this->fkWalletId;
     }
 
     /**
-     * @param string $messageId
+     * @param UuidInterface $fkWalletId
      */
-    public function setMessageId(string $messageId): void
+    public function setFkWalletId(UuidInterface $fkWalletId): void
     {
-        $this->messageId = $messageId;
+        $this->fkWalletId = $fkWalletId;
     }
 
-    public function getTransaction()
+    /**
+     * @return BelongsTo
+     */
+    public function getWallet()
     {
-        return $this->belongsTo(TransactionFrom::class, 'fk_transaction_from_id');
+        return $this->belongsTo(Wallet::class, 'fk_wallet_id');
+    }
+
+    /**
+     * @return HasOne
+     */
+    public function getTransactionTo()
+    {
+        return $this->hasOne(TransactionTo::class, 'fk_transaction_from_id', 'id');
+    }
+
+    /**
+     * @return HasMany
+     */
+    public function getEvents()
+    {
+        return $this->hasMany(Event::class, 'fk_transaction_from_id', 'id');
     }
 }

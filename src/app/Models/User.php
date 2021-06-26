@@ -12,40 +12,27 @@ class User extends Model
 {
     use HasFactory;
 
-    /**
-     * @var Uuid
-     */
+    /** @var Uuid */
     private $id;
-    /**
-     * @var string
-     */
-    private $name;
-    /**
-     * @var string
-     */
-    private $email;
-    /**
-     * @var string
-     */
-    private $password;
-    /**
-     * @var string
-     */
-    private $document_value;
-    /**
-     * @var DateTime
-     */
-    private $created_at;
-    /**
-     * @var DateTime
-     */
-    private $updated_at;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
+    /** @var string */
+    private $name;
+
+    /** @var string */
+    private $email;
+
+    /** @var string */
+    private $password;
+
+    /** @var string */
+    private $documentValue;
+
+    /** @var DateTime */
+    private $createdAt;
+
+    /** @var DateTime */
+    private $updatedAt;
+
     protected $fillable = [
         'id',
         'name',
@@ -57,13 +44,127 @@ class User extends Model
     ];
 
     protected $casts = [
-        'id' => 'string'
+        'id' => 'string',
+        'created_at' => 'datetime:Y-m-d',
+        'updated_at' => 'datetime:Y-m-d'
     ];
+
+    /**
+     * @return Uuid
+     */
+    public function getId(): Uuid
+    {
+        return $this->id;
+    }
+
+    /**
+     * @param Uuid $id
+     */
+    public function setId(Uuid $id): void
+    {
+        $this->id = $id;
+    }
+
+    /**
+     * @return string
+     */
+    public function getName(): string
+    {
+        return $this->name;
+    }
+
+    /**
+     * @param string $name
+     */
+    public function setName(string $name): void
+    {
+        $this->name = $name;
+    }
+
+    /**
+     * @return string
+     */
+    public function getEmail(): string
+    {
+        return $this->email;
+    }
+
+    /**
+     * @param string $email
+     */
+    public function setEmail(string $email): void
+    {
+        $this->email = $email;
+    }
+
+    /**
+     * @return string
+     */
+    public function getPassword(): string
+    {
+        return $this->password;
+    }
+
+    /**
+     * @param string $password
+     */
+    public function setPassword(string $password): void
+    {
+        $this->password = $password;
+    }
+
+    /**
+     * @return string
+     */
+    public function getDocumentValue(): string
+    {
+        return $this->documentValue;
+    }
+
+    /**
+     * @param string $documentValue
+     */
+    public function setDocumentValue(string $documentValue): void
+    {
+        $this->documentValue = $documentValue;
+    }
+
+    /**
+     * @return DateTime
+     */
+    public function getCreatedAt(): DateTime
+    {
+        return $this->createdAt;
+    }
+
+    /**
+     * @param DateTime $createdAt
+     */
+    public function setCreatedAt(DateTime $createdAt): void
+    {
+        $this->createdAt = $createdAt;
+    }
+
+    /**
+     * @return DateTime
+     */
+    public function getUpdatedAt(): DateTime
+    {
+        return $this->updatedAt;
+    }
+
+    /**
+     * @param DateTime $updatedAt
+     */
+    public function setUpdatedAt(DateTime $updatedAt): void
+    {
+        $this->updatedAt = $updatedAt;
+    }
 
     /**
      * @return HasOne
      */
-    public function wallet()
+    public function getWallet()
     {
         return $this->hasOne(Wallet::class, 'fk_user_id', 'id');
     }

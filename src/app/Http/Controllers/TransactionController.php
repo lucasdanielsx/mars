@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Consumers\TransactionNotPaidConsumer;
 use App\Helpers\Sqs\SqsHelper;
 use App\Helpers\Sqs\SqsUsEast1Client;
-use App\Models\Transaction;
+use App\Models\TransactionFrom;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -40,10 +40,10 @@ class TransactionController extends Controller
     }
 
     /**
-     * @param Transaction $transaction
+     * @param TransactionFrom $transaction
      * @param $userFrom
      */
-    private function saveAll(Transaction $transaction, $userFrom): void
+    private function saveAll(TransactionFrom $transaction, $userFrom): void
     {
         DB::transaction(function () use ($transaction, $userFrom) {
             $transaction->save();
@@ -88,11 +88,11 @@ class TransactionController extends Controller
      * @param User $userFrom
      * @param User $userTo
      * @param Request $request
-     * @return Transaction
+     * @return TransactionFrom
      */
-    private function convertTransaction(User $userFrom, User $userTo, Request $request): Transaction
+    private function convertTransaction(User $userFrom, User $userTo, Request $request): TransactionFrom
     {
-        $transaction = new Transaction();
+        $transaction = new TransactionFrom();
         $transaction->setId(Uuid::uuid4());
         $transaction->setFkWalletFrom($userFrom->wallet->id);
         $transaction->setFkWalletTo($userTo->wallet->id);
@@ -142,7 +142,7 @@ class TransactionController extends Controller
             $this->publish('mars-authorize_transaction', $transaction->toArray());
             $test = new TransactionNotPaidConsumer();
             $test->process();
-            Log::info('Transaction ' . $transaction->id . ' was created');
+            Log::info('TransactionFrom ' . $transaction->id . ' was created');
 
             return $this->response('Success', $transaction->toArray(), 201);
         } catch (\Throwable $e) {

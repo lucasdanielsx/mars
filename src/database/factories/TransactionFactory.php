@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\Models\Transaction;
+use App\Models\TransactionFrom;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class TransactionFactory extends Factory
@@ -12,7 +12,7 @@ class TransactionFactory extends Factory
      *
      * @var string
      */
-    protected $model = Transaction::class;
+    protected $model = TransactionFrom::class;
 
     /**
      * Define the model's default state.

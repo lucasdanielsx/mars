@@ -6,7 +6,7 @@ use App\Helpers\Enums\Queues;
 use App\Helpers\SqsHelper;
 use App\Helpers\SqsUsEast1Client;
 use App\Models\Event;
-use App\Models\Transaction;
+use App\Models\TransactionFrom;
 use Aws\Sqs\SqsClient;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -15,10 +15,10 @@ use Ramsey\Uuid\Uuid;
 class TransactionNotPaidConsumer extends Consumer
 {
     /**
-     * @param Transaction $transaction
+     * @param TransactionFrom $transaction
      * @return array
      */
-    private function authorize(Transaction $transaction): array
+    private function authorize(TransactionFrom $transaction): array
     {
         try {
             $response = Http::get(env('AUTHORIZER_URL'));
@@ -34,12 +34,12 @@ class TransactionNotPaidConsumer extends Consumer
     }
 
     /**
-     * @param Transaction $transaction
+     * @param TransactionFrom $transaction
      * @param array $message
      * @param int $statusCode
      * @return array
      */
-    private function mountEvent(Transaction $transaction, array $message, int $statusCode)
+    private function mountEvent(TransactionFrom $transaction, array $message, int $statusCode)
     {
         list($type, $queue) = ($statusCode == 200) ? ['transaction_authorized', 'transaction_paid'] : ['transaction_not_authorized', 'transaction_not_paid'];
 
@@ -61,7 +61,7 @@ class TransactionNotPaidConsumer extends Consumer
 
         foreach ($messages->get('Messages') as $index => $message) {
             try {
-                $transaction = new Transaction(json_decode($message['Body'], true));
+                $transaction = new TransactionFrom(json_decode($message['Body'], true));
                 $event = null;
 
                 list($event, $queue) = $this->authorize($transaction);
@@ -70,7 +70,7 @@ class TransactionNotPaidConsumer extends Consumer
                 $sqsHelper->sendMessage($queue, $transaction->toArray());
                 $sqsHelper->deleteMessage(Queues::AUTHORIZE_TRANSACTION, $messages, $index);
 
-                Log::info("Transaction " . $transaction->id . " was authorized");
+                Log::info("TransactionFrom " . $transaction->id . " was authorized");
             } catch (\Throwable $e) {
                 Log::error("Error trying process transaction", [$e->getTraceAsString()]);
 

@@ -6,7 +6,7 @@ use App\Helpers\Enums\Queues;
 use App\Helpers\Sqs\SqsHelper;
 use App\Helpers\Sqs\SqsUsEast1Client;
 use App\Models\Event;
-use App\Models\Transaction;
+use App\Models\TransactionFrom;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Ramsey\Uuid\Uuid;
@@ -14,10 +14,10 @@ use Ramsey\Uuid\Uuid;
 class AuthorizeTransactionConsumer extends Consumer
 {
     /**
-     * @param Transaction $transaction
+     * @param TransactionFrom $transaction
      * @return array
      */
-    private function authorize(Transaction $transaction, string $messageId): array
+    private function authorize(TransactionFrom $transaction, string $messageId): array
     {
         try {
             $response = Http::get(env('AUTHORIZER_URL'));
@@ -33,18 +33,18 @@ class AuthorizeTransactionConsumer extends Consumer
     }
 
     /**
-     * @param Transaction $transaction
+     * @param TransactionFrom $transaction
      * @param array $message
      * @param int $statusCode
      * @return array
      */
-    private function convertEvent(Transaction $transaction, array $message, int $statusCode, string $messageId)
+    private function convertEvent(TransactionFrom $transaction, array $message, int $statusCode, string $messageId)
     {
         list($type, $queue) = ($statusCode == 200) ? ['transaction_authorized', 'transaction_paid'] : ['transaction_not_authorized', 'transaction_not_paid'];
 
         $event = new Event();
         $event->setId(Uuid::uuid4());
-        $event->setFkTransactionId($transaction->getId());
+        $event->setFkTransactionFromId($transaction->getId());
         $event->setType($type);
         $event->setPayload($message);
         $event->setMessageId($messageId);
@@ -61,7 +61,7 @@ class AuthorizeTransactionConsumer extends Consumer
 
         foreach ($messages->get('Messages') as $index => $message) {
             try {
-                $transaction = new Transaction(json_decode($message['Body'], true));
+                $transaction = new TransactionFrom(json_decode($message['Body'], true));
 
                 list($event, $queue) = $this->authorize($transaction, $message['MessageId']);
 
@@ -70,7 +70,7 @@ class AuthorizeTransactionConsumer extends Consumer
                 $sqsHelper->sendMessage($queue, $transaction->toArray());
                 $sqsHelper->deleteMessage(Queues::AUTHORIZE_TRANSACTION, $messages, $index);
 
-                Log::info("Transaction " . $transaction->getId() . " was authorized");
+                Log::info("TransactionFrom " . $transaction->getId() . " was authorized");
             } catch (\Throwable $e) {
                 Log::error("Error trying process transaction", [$e->getTraceAsString()]);
 

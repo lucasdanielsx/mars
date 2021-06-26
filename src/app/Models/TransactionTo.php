@@ -5,9 +5,10 @@ namespace App\Models;
 use DateTime;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Ramsey\Uuid\UuidInterface;
 
-class Transaction extends Model
+class TransactionTo extends Model
 {
     use HasFactory;
 
@@ -15,10 +16,10 @@ class Transaction extends Model
     private $id;
 
     /** @var UuidInterface */
-    private $fk_wallet_from;
+    private $fkWalletId;
 
     /** @var UuidInterface */
-    private $fk_wallet_to;
+    private $fkTransactionFromId;
 
     /** @var int */
     private $amount;
@@ -37,8 +38,8 @@ class Transaction extends Model
 
     protected $fillable = [
         "id",
-        "fk_wallet_from",
-        "fk_wallet_to",
+        "fk_transaction_from_id",
+        "fk_wallet_id",
         "amount",
         "status",
         "payload",
@@ -49,7 +50,9 @@ class Transaction extends Model
     protected $casts = [
         'id' => 'string',
         'fk_wallet_from' => 'string',
-        'fk_wallet_to' => 'string'
+        'fk_wallet_to' => 'string',
+        'created_at' => 'datetime:Y-m-d',
+        'updated_at' => 'datetime:Y-m-d'
     ];
 
     /**
@@ -71,33 +74,33 @@ class Transaction extends Model
     /**
      * @return UuidInterface
      */
-    public function getFkWalletFrom(): UuidInterface
+    public function getFkWalletId(): UuidInterface
     {
-        return $this->fk_wallet_from;
+        return $this->fkWalletId;
     }
 
     /**
-     * @param UuidInterface $fk_wallet_from
+     * @param UuidInterface $fkWalletId
      */
-    public function setFkWalletFrom(UuidInterface $fk_wallet_from): void
+    public function setFkWalletId(UuidInterface $fkWalletId): void
     {
-        $this->fk_wallet_from = $fk_wallet_from;
+        $this->fkWalletId = $fkWalletId;
     }
 
     /**
      * @return UuidInterface
      */
-    public function getFkWalletTo(): UuidInterface
+    public function getFkTransactionFromId(): UuidInterface
     {
-        return $this->fk_wallet_to;
+        return $this->fkTransactionFromId;
     }
 
     /**
-     * @param UuidInterface $fk_wallet_to
+     * @param UuidInterface $fkTransactionFromId
      */
-    public function setFkWalletTo(UuidInterface $fk_wallet_to): void
+    public function setFkTransactionFromId(UuidInterface $fkTransactionFromId): void
     {
-        $this->fk_wallet_to = $fk_wallet_to;
+        $this->fkTransactionFromId = $fkTransactionFromId;
     }
 
     /**
@@ -178,5 +181,21 @@ class Transaction extends Model
     public function setUpdatedAt(DateTime $updatedAt): void
     {
         $this->updatedAt = $updatedAt;
+    }
+
+    /**
+     * @return BelongsTo
+     */
+    public function getWallet()
+    {
+        return $this->belongsTo(Wallet::class, 'fk_wallet_id');
+    }
+
+    /**
+     * @return BelongsTo
+     */
+    public function getTransactionFrom()
+    {
+        return $this->belongsTo(Wallet::class, 'fk_transaction_from_id');
     }
 }

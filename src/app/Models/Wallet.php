@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use DateTime;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Ramsey\Uuid\Uuid;
@@ -23,10 +24,15 @@ class Wallet extends Model
      */
     private $amount;
 
+    /** @var DateTime */
+    private $createdAt;
+
+    /** @var DateTime */
+    private $updatedAt;
+
     protected $fillable = [
         'id',
-        'fk_wallet_from',
-        'fk_wallet_to',
+        'fk_user_id',
         'amount',
         'created_at',
         'updated_at'
@@ -34,16 +40,23 @@ class Wallet extends Model
 
     protected $casts = [
         'id' => 'string',
-        'fk_user_id' => 'string'
+        'fk_user_id' => 'string',
+        'created_at' => 'datetime:Y-m-d',
+        'updated_at' => 'datetime:Y-m-d'
     ];
 
-    public function user()
+    public function getUser()
     {
         return $this->belongsTo(User::class, 'fk_user_id');
     }
 
-    public function transactions()
+    public function getTransactionsFrom()
     {
-        return $this->hasMany(Transaction::class);
+        return $this->hasMany(TransactionFrom::class, 'fk_wallet_id', 'id');
+    }
+
+    public function getTransactionsTo()
+    {
+        return $this->hasMany(TransactionTo::class, 'fk_wallet_id', 'id');
     }
 }
