@@ -17,6 +17,7 @@ class CreateEventsTable extends Migration
             $table->uuid('id')->unique()->primary();
             $table->foreignUuid('fk_transaction_id')->constrained('transactions');
             $table->string('type');
+            $table->string('message_id');
             $table->jsonb('payload');
             $table->timestamps();
         });

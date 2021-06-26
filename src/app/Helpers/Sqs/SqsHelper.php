@@ -1,18 +1,17 @@
 <?php
 
-namespace App\Helpers;
+namespace App\Helpers\Sqs;
 
 use Aws\Exception\AwsException;
-use Aws\Sqs\SqsClient;
 use Illuminate\Support\Facades\Log;
 
 class SqsHelper
 {
     private $client;
 
-    public function __construct(SqsClient $client)
+    public function __construct(SqsClientInterface $client)
     {
-        $this->client = $client;
+        $this->client = $client::client();
     }
 
     public function getMessages(string $queue): \Aws\Result

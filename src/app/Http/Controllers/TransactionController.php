@@ -3,11 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Consumers\TransactionNotPaidConsumer;
-use App\Helpers\SqsHelper;
+use App\Helpers\Sqs\SqsHelper;
+use App\Helpers\Sqs\SqsUsEast1Client;
 use App\Models\Transaction;
 use App\Models\User;
-use Aws\Sqs\SqsClient;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
@@ -36,13 +35,7 @@ class TransactionController extends Controller
 
     private function publish(string $queue, array $message): void
     {
-        $sqsClient = new SqsClient([
-            'profile' => 'default',
-            'region' => env('AWS_DEFAULT_REGION'),
-            'version' => '2012-11-05'
-        ]);
-
-        $sqsHelper = new SqsHelper($sqsClient);
+        $sqsHelper = new SqsHelper(new SqsUsEast1Client());
         $sqsHelper->sendMessage($queue, $message);
     }
 
@@ -54,7 +47,7 @@ class TransactionController extends Controller
     {
         DB::transaction(function () use ($transaction, $userFrom) {
             $transaction->save();
-            $userFrom->wallet->amount = $userFrom->wallet->amount - $transaction->amount;
+            $userFrom->wallet->amount = $userFrom->wallet->amount - $transaction->getAmount();
             $userFrom->wallet->update();
         });
     }
@@ -100,12 +93,12 @@ class TransactionController extends Controller
     private function convertTransaction(User $userFrom, User $userTo, Request $request): Transaction
     {
         $transaction = new Transaction();
-        $transaction->id = Uuid::uuid4();
-        $transaction->fk_wallet_from = $userFrom->wallet->id;
-        $transaction->fk_wallet_to = $userTo->wallet->id;
-        $transaction->amount = $request['amount'];
-        $transaction->status = 'created';
-        $transaction->payload = $request->getContent();
+        $transaction->setId(Uuid::uuid4());
+        $transaction->setFkWalletFrom($userFrom->wallet->id);
+        $transaction->setFkWalletTo($userTo->wallet->id);
+        $transaction->setAmount($request['amount']);
+        $transaction->setStatus('created');
+        $transaction->setPayload(json_decode($request->getContent(), true));
 
         return $transaction;
     }

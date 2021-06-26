@@ -3,9 +3,9 @@
 namespace App\Consumers;
 
 use App\Helpers\SqsHelper;
+use App\Helpers\SqsUsEast1Client;
 use App\Models\Event;
 use App\Models\Transaction;
-use Aws\Sqs\SqsClient;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Ramsey\Uuid\Uuid;
@@ -52,16 +52,10 @@ class NotifyClientConsumer extends Consumer
 
     public function process()
     {
-        Log::info("Starting " . TransactionNotPaidConsumer::class . "process");
+        Log::info("Starting " . self::class . " process");
 
-        $sqsClient = new SqsClient([
-            'profile' => 'default',
-            'region' => env('AWS_DEFAULT_REGION'),
-            'version' => '2012-11-05'
-        ]);
-
-        $sqsHelper = new SqsHelper($sqsClient);
-        $messages = $sqsHelper->getMessages('mars-authorize_transaction');
+        $sqsHelper = new SqsHelper(new SqsUsEast1Client());
+        $messages = $sqsHelper->getMessages('mars-notify_client');
 
         foreach ($messages->get('Messages') as $index => $message) {
             try {

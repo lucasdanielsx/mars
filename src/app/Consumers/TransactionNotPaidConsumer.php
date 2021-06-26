@@ -2,7 +2,9 @@
 
 namespace App\Consumers;
 
+use App\Helpers\Enums\Queues;
 use App\Helpers\SqsHelper;
+use App\Helpers\SqsUsEast1Client;
 use App\Models\Event;
 use App\Models\Transaction;
 use Aws\Sqs\SqsClient;
@@ -52,16 +54,10 @@ class TransactionNotPaidConsumer extends Consumer
 
     public function process()
     {
-        Log::info("Starting " . TransactionNotPaidConsumer::class . "process");
+        Log::info("Starting " . self::class . " process");
 
-        $sqsClient = new SqsClient([
-            'profile' => 'default',
-            'region' => env('AWS_DEFAULT_REGION'),
-            'version' => '2012-11-05'
-        ]);
-
-        $sqsHelper = new SqsHelper($sqsClient);
-        $messages = $sqsHelper->getMessages('mars-authorize_transaction');
+        $sqsHelper = new SqsHelper(new SqsUsEast1Client());
+        $messages = $sqsHelper->getMessages('mars-transaction_not_paid');
 
         foreach ($messages->get('Messages') as $index => $message) {
             try {
@@ -72,7 +68,7 @@ class TransactionNotPaidConsumer extends Consumer
                 $event->save();
 
                 $sqsHelper->sendMessage($queue, $transaction->toArray());
-                $sqsHelper->deleteMessage('mars-authorize_transaction', $messages, $index);
+                $sqsHelper->deleteMessage(Queues::AUTHORIZE_TRANSACTION, $messages, $index);
 
                 Log::info("Transaction " . $transaction->id . " was authorized");
             } catch (\Throwable $e) {

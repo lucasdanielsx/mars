@@ -2,10 +2,11 @@
 
 namespace App\Consumers;
 
-use App\Helpers\SqsHelper;
+use App\Helpers\Enums\Queues;
+use App\Helpers\Sqs\SqsHelper;
+use App\Helpers\Sqs\SqsUsEast1Client;
 use App\Models\Event;
 use App\Models\Transaction;
-use Aws\Sqs\SqsClient;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Ramsey\Uuid\Uuid;
@@ -16,16 +17,16 @@ class AuthorizeTransactionConsumer extends Consumer
      * @param Transaction $transaction
      * @return array
      */
-    private function authorize(Transaction $transaction): array
+    private function authorize(Transaction $transaction, string $messageId): array
     {
         try {
             $response = Http::get(env('AUTHORIZER_URL'));
 
-            list($event, $queue) = $this->convertEvent($transaction, json_decode($response->body(), true), $response->status());
+            list($event, $queue) = $this->convertEvent($transaction, json_decode($response->body(), true), $response->status(), $messageId);
         } catch (\Throwable $e) {
-            Log::error("Error trying authorize transaction " . $transaction->id, [$e->getTraceAsString()]);
+            Log::error("Error trying authorize transaction " . $transaction->getId(), [$e->getTraceAsString()]);
 
-            list($event, $queue) = $this->convertEvent($transaction, ["error" => $e->getMessage()], 500);
+            list($event, $queue) = $this->convertEvent($transaction, ["error" => $e->getMessage()], 500, $messageId);
         }
 
         return [$event, $queue];
@@ -37,44 +38,39 @@ class AuthorizeTransactionConsumer extends Consumer
      * @param int $statusCode
      * @return array
      */
-    private function convertEvent(Transaction $transaction, array $message, int $statusCode)
+    private function convertEvent(Transaction $transaction, array $message, int $statusCode, string $messageId)
     {
         list($type, $queue) = ($statusCode == 200) ? ['transaction_authorized', 'transaction_paid'] : ['transaction_not_authorized', 'transaction_not_paid'];
 
         $event = new Event();
-        $event->id = Uuid::uuid4();
-        $event->fk_transaction_id = $transaction->id;
-        $event->type = $type;
-        $event->payload = json_encode($message, true);
+        $event->setId(Uuid::uuid4());
+        $event->setFkTransactionId($transaction->getId());
+        $event->setType($type);
+        $event->setPayload($message);
+        $event->setMessageId($messageId);
 
         return [$event, $queue];
     }
 
     public function process()
     {
-        Log::info("Starting " . TransactionNotPaidConsumer::class . "process");
+        Log::info("Starting " . self::class . " process");
 
-        $sqsClient = new SqsClient([
-            'profile' => 'default',
-            'region' => env('AWS_DEFAULT_REGION'),
-            'version' => '2012-11-05'
-        ]);
-
-        $sqsHelper = new SqsHelper($sqsClient);
-        $messages = $sqsHelper->getMessages('mars-authorize_transaction');
+        $sqsHelper = new SqsHelper(new SqsUsEast1Client());
+        $messages = $sqsHelper->getMessages(Queues::AUTHORIZE_TRANSACTION);
 
         foreach ($messages->get('Messages') as $index => $message) {
             try {
                 $transaction = new Transaction(json_decode($message['Body'], true));
-                $event = null;
 
-                list($event, $queue) = $this->authorize($transaction);
+                list($event, $queue) = $this->authorize($transaction, $message['MessageId']);
+
                 $event->save();
 
                 $sqsHelper->sendMessage($queue, $transaction->toArray());
-                $sqsHelper->deleteMessage('mars-authorize_transaction', $messages, $index);
+                $sqsHelper->deleteMessage(Queues::AUTHORIZE_TRANSACTION, $messages, $index);
 
-                Log::info("Transaction " . $transaction->id . " was authorized");
+                Log::info("Transaction " . $transaction->getId() . " was authorized");
             } catch (\Throwable $e) {
                 Log::error("Error trying process transaction", [$e->getTraceAsString()]);
 
