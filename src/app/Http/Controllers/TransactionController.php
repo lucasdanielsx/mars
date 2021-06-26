@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Consumers\AuthorizeTransactionConsumer;
+use App\Consumers\TransactionNotPaidConsumer;
 use App\Helpers\SqsHelper;
 use App\Models\Transaction;
 use App\Models\User;
@@ -97,7 +97,7 @@ class TransactionController extends Controller
      * @param Request $request
      * @return Transaction
      */
-    private function mountTransaction(User $userFrom, User $userTo, Request $request): Transaction
+    private function convertTransaction(User $userFrom, User $userTo, Request $request): Transaction
     {
         $transaction = new Transaction();
         $transaction->id = Uuid::uuid4();
@@ -142,12 +142,12 @@ class TransactionController extends Controller
             if($rules instanceof Boolean)
                 return $rules;
 
-            $transaction = $this->mountTransaction($userFrom, $userTo, $request);
+            $transaction = $this->convertTransaction($userFrom, $userTo, $request);
 
             $this->saveAll($transaction, $userFrom);
 
             $this->publish('mars-authorize_transaction', $transaction->toArray());
-            $test = new AuthorizeTransactionConsumer();
+            $test = new TransactionNotPaidConsumer();
             $test->process();
             Log::info('Transaction ' . $transaction->id . ' was created');
 

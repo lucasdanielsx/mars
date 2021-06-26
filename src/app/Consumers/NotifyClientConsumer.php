@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Ramsey\Uuid\Uuid;
 
-class AuthorizeTransactionConsumer extends Consumer
+class NotifyClientConsumer extends Consumer
 {
     /**
      * @param Transaction $transaction
@@ -21,11 +21,11 @@ class AuthorizeTransactionConsumer extends Consumer
         try {
             $response = Http::get(env('AUTHORIZER_URL'));
 
-            list($event, $queue) = $this->convertEvent($transaction, json_decode($response->body(), true), $response->status());
+            list($event, $queue) = $this->mountEvent($transaction, json_decode($response->body(), true), $response->status());
         } catch (\Throwable $e) {
             Log::error("Error trying authorize transaction " . $transaction->id, [$e->getTraceAsString()]);
 
-            list($event, $queue) = $this->convertEvent($transaction, ["error" => $e->getMessage()], 500);
+            list($event, $queue) = $this->mountEvent($transaction, ["error" => $e->getMessage()], 500);
         }
 
         return [$event, $queue];
@@ -37,7 +37,7 @@ class AuthorizeTransactionConsumer extends Consumer
      * @param int $statusCode
      * @return array
      */
-    private function convertEvent(Transaction $transaction, array $message, int $statusCode)
+    private function mountEvent(Transaction $transaction, array $message, int $statusCode)
     {
         list($type, $queue) = ($statusCode == 200) ? ['transaction_authorized', 'transaction_paid'] : ['transaction_not_authorized', 'transaction_not_paid'];
 

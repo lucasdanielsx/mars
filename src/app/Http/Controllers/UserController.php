@@ -22,7 +22,7 @@ class UserController extends Controller
         if($validator->fails())
             return $this->response('', $validator->errors()->toArray(), 400);
 
-        list($newUser, $newWallet) = $this->mountUserAndWallet($request);
+        list($newUser, $newWallet) = $this->convertUserAndWallet($request);
 
         try {
             $user = User::where('document_value', $request['document_value'])->orWhere('email', $request['email'])->first();
@@ -62,7 +62,7 @@ class UserController extends Controller
      * @param Request $request
      * @return array (User, Wallet)
      */
-    private function mountUserAndWallet(Request $request): array
+    private function convertUserAndWallet(Request $request): array
     {
         $userId = Uuid::uuid4();
 
