@@ -3,12 +3,15 @@
 namespace App\Models;
 
 use DateTime;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Ramsey\Uuid\Uuid;
 
 class User extends Model
 {
+    use HasFactory;
+
     /**
      * @var Uuid
      */
@@ -48,7 +51,9 @@ class User extends Model
         'name',
         'email',
         'document_value',
-        'type'
+        'type',
+        "updated_at",
+        "created_at"
     ];
 
     protected $casts = [
