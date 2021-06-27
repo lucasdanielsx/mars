@@ -51,7 +51,7 @@ class AuthorizeTransactionConsumer extends Consumer
                 $response = $client->authorize($transaction);
 
                 list($event, $queue) = $this->convertEvent($transaction, json_decode($response->body(), true), $response->status(), $message['MessageId']);
-                var_dump(json_encode($event, true));
+
                 $event->save();
 
                 $sqsHelper->sendMessage($queue, $transaction->toArray());
