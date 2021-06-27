@@ -14,7 +14,7 @@ use Throwable;
 class TransactionPaidConsumer extends Consumer
 {
     /**
-     * @param $transactionFrom
+     * @param TransactionFrom $transactionFrom
      */
     private function updateAll(TransactionFrom $transactionFrom): void
     {
@@ -53,7 +53,7 @@ class TransactionPaidConsumer extends Consumer
                 $sqsHelper->sendMessage(Queue::NOTIFY_CLIENT, $transactionFrom->toArray());
                 $sqsHelper->deleteMessage(Queue::TRANSACTION_PAID, $messages, $index);
 
-                Log::info("TransactionFrom " . $transactionFrom->id . " was authorized");
+                Log::info("Transaction " . $body->id . " was processed");
             } catch (Throwable $e) {
                 Log::error("Error trying process transaction: " . $e->getMessage(), [$e->getTraceAsString()]);
 
