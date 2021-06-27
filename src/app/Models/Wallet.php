@@ -8,6 +8,8 @@ class Wallet extends BaseModel
 {
     use HasFactory;
 
+    protected $keyType = 'string';
+
     private $id;
     private $fkUserId;
     private $amount;
@@ -34,12 +36,12 @@ class Wallet extends BaseModel
         return $this->belongsTo(User::class, 'fk_user_id');
     }
 
-    public function getTransactionsFrom()
+    public function transactionsFrom()
     {
         return $this->hasMany(TransactionFrom::class, 'fk_wallet_id', 'id');
     }
 
-    public function getTransactionsTo()
+    public function transactionsTo()
     {
         return $this->hasMany(TransactionTo::class, 'fk_wallet_id', 'id');
     }

@@ -8,6 +8,8 @@ class Event extends BaseModel
 {
     use HasFactory;
 
+    protected $keyType = 'string';
+
     private $id;
     private $fkTransactionFromId;
     private $type;
@@ -21,6 +23,7 @@ class Event extends BaseModel
         "fk_transaction_from_id",
         "type",
         "payload",
+        "message_id",
         "updated_at",
         "created_at"
     ];

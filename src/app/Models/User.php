@@ -9,6 +9,8 @@ class User extends BaseModel
 {
     use HasFactory;
 
+    protected $keyType = 'string';
+
     private $id;
     private $name;
     private $email;

@@ -11,6 +11,8 @@ class TransactionFrom extends BaseModel
 {
     use HasFactory;
 
+    protected $keyType = 'string';
+
     private $id;
     private $fkWalletId;
     private $amount;
@@ -33,8 +35,7 @@ class TransactionFrom extends BaseModel
 
     protected $casts = [
         'id' => 'string',
-        'fk_wallet_from' => 'string',
-        'fk_wallet_to' => 'string',
+        'fk_wallet_id' => 'string',
         'created_at' => 'datetime:Y-m-d',
         'updated_at' => 'datetime:Y-m-d'
     ];
@@ -52,7 +53,7 @@ class TransactionFrom extends BaseModel
      */
     public function transactionTo()
     {
-        return $this->hasOne(TransactionTo::class, 'fk_transaction_from_id', 'id');
+        return $this->hasOne(TransactionTo::class, 'fk_transaction_from_id');
     }
 
     /**
