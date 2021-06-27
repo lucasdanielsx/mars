@@ -2,7 +2,7 @@
 
 namespace App\Consumers;
 
-use App\Helpers\Enums\Queues;
+use App\Helpers\Enums\TransactionStatus;
 use App\Helpers\SqsHelper;
 use App\Helpers\SqsUsEast1Client;
 use App\Models\Event;
@@ -68,7 +68,7 @@ class TransactionNotPaidConsumer extends Consumer
                 $event->save();
 
                 $sqsHelper->sendMessage($queue, $transaction->toArray());
-                $sqsHelper->deleteMessage(Queues::AUTHORIZE_TRANSACTION, $messages, $index);
+                $sqsHelper->deleteMessage(TransactionStatus::AUTHORIZE_TRANSACTION, $messages, $index);
 
                 Log::info("TransactionFrom " . $transaction->id . " was authorized");
             } catch (\Throwable $e) {

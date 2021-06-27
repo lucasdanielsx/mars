@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\Enums\TransactionStatus;
 use App\Models\User;
 use App\Models\Wallet;
 use Illuminate\Http\Request;
@@ -67,15 +68,15 @@ class UserController extends Controller
         $userId = Uuid::uuid4();
 
         $user = new User();
-        $user->id = $userId;
+        $user->id =$userId;
         $user->name = $request['name'];
         $user->email = $request['email'];
-        $user->document_value = $request['document_value'];
-        $user->type = "CUSTOMER"; //TODO enum CUSTOMER, STORE
+        $user->documentValue = $request['document_value'];
+        $user->type = TransactionStatus::CUSTOMER;
 
         $wallet = new Wallet();
         $wallet->id = Uuid::uuid4();
-        $wallet->fk_user_id = $userId;
+        $wallet->fkUserId = $userId;
         $wallet->amount = 0;
 
         return [$user, $wallet];

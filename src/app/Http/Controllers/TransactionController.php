@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Consumers\AuthorizeTransactionConsumer;
+use App\Helpers\Enums\TransactionStatus;
 use App\Helpers\Sqs\SqsHelper;
 use App\Helpers\Sqs\SqsUsEast1Client;
 use App\Models\TransactionFrom;
@@ -51,7 +52,7 @@ class TransactionController extends Controller
         DB::transaction(function () use ($transactionFrom, $transactionTo, $userFrom) {
             $transactionFrom->save();
             $transactionTo->save();
-            $userFrom->wallet->amount = $userFrom->wallet->amount - $transactionFrom->getAmount();
+            $userFrom->wallet->amount = $userFrom->wallet->amount - $transactionFrom->amount;
             $userFrom->wallet->update();
         });
     }
@@ -60,7 +61,7 @@ class TransactionController extends Controller
      * @param String $value
      * @return mixed
      */
-    private function getUserByDocumentValue(String $value)
+    private function getUserByDocumentValue(string $value)
     {
         return User::where('document_value', '=', $value)->first();
     }
@@ -99,19 +100,19 @@ class TransactionController extends Controller
         $transactionFromId = Uuid::uuid4();
 
         $transactionFrom = new TransactionFrom();
-        $transactionFrom->setId($transactionFromId);
-        $transactionFrom->setFkWalletId($userFrom->getWallet->getId());
-        $transactionFrom->setAmount($request['amount']);
-        $transactionFrom->setStatus('created');
-        $transactionFrom->setPayload(json_decode($request->getContent(), true));
+        $transactionFrom->id = $transactionFromId;
+        $transactionFrom->fkWalletId = $userFrom->wallet->id;
+        $transactionFrom->amount = $request['amount'];
+        $transactionFrom->status = TransactionStatus::CREATED;
+        $transactionFrom->payload = $request->getContent();
 
         $transactionTo = new TransactionTo();
-        $transactionTo->setId(Uuid::uuid4());
-        $transactionTo->setFkTransactionFromId($transactionFromId);
-        $transactionTo->setFkWalletId($userTo->getWallet->getId());
-        $transactionTo->setAmount($request['amount']);
-        $transactionTo->setStatus('created');
-        $transactionTo->setPayload(json_decode($request->getContent(), true));
+        $transactionTo->id = Uuid::uuid4();
+        $transactionTo->fkTransactionFromId = $transactionFromId;
+        $transactionTo->fkWalletId = $userTo->wallet->id;
+        $transactionTo->amount = $request['amount'];
+        $transactionTo->status = TransactionStatus::CREATED;
+        $transactionTo->payload = $request->getContent();
 
         return [$transactionFrom, $transactionTo];
     }
@@ -145,7 +146,7 @@ class TransactionController extends Controller
 
             $rules = $this->userRules($userFrom, $userTo, $request['amount']);
 
-            if($rules instanceof Boolean)
+            if ($rules instanceof Boolean)
                 return $rules;
 
             list($transactionFrom, $transactionTo) = $this->convertTransaction($userFrom, $userTo, $request);

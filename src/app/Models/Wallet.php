@@ -2,32 +2,16 @@
 
 namespace App\Models;
 
-use DateTime;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-use Ramsey\Uuid\Uuid;
 
-class Wallet extends Model
+class Wallet extends BaseModel
 {
     use HasFactory;
 
-    /**
-     * @var Uuid
-     */
     private $id;
-    /**
-     * @var Uuid
-     */
-    private $fk_user_id;
-    /**
-     * @var int
-     */
+    private $fkUserId;
     private $amount;
-
-    /** @var DateTime */
     private $createdAt;
-
-    /** @var DateTime */
     private $updatedAt;
 
     protected $fillable = [
@@ -45,7 +29,7 @@ class Wallet extends Model
         'updated_at' => 'datetime:Y-m-d'
     ];
 
-    public function getUser()
+    public function user()
     {
         return $this->belongsTo(User::class, 'fk_user_id');
     }

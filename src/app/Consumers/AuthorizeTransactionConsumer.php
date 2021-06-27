@@ -26,11 +26,11 @@ class AuthorizeTransactionConsumer extends Consumer
         list($type, $queue) = ($statusCode == 200) ? ['transaction_authorized', 'transaction_paid'] : ['transaction_not_authorized', 'transaction_not_paid'];
 
         $event = new Event();
-        $event->setId(Uuid::uuid4());
-        $event->setFkTransactionFromId($transaction->getId());
-        $event->setType($type);
-        $event->setPayload($message);
-        $event->setMessageId($messageId);
+        $event->id = Uuid::uuid4();
+        $event->fkTransactionFromId = $transaction->id;
+        $event->type = $type;
+        $event->payload = $message;
+        $event->message_id = $messageId;
 
         return [$event, $queue];
     }
@@ -56,7 +56,7 @@ class AuthorizeTransactionConsumer extends Consumer
                 $sqsHelper->sendMessage($queue, $transaction->toArray());
                 $sqsHelper->deleteMessage(Queues::AUTHORIZE_TRANSACTION, $messages, $index);
 
-                Log::info("TransactionFrom " . $transaction->getId() . " was authorized");
+                Log::info("Transaction " . $transaction->id . " was authorized");
             } catch (Throwable $e) {
                 Log::error("Error trying process transaction", [$e->getTraceAsString()]);
 
