@@ -52,6 +52,6 @@ class TransactionTo extends BaseModel
      */
     public function transactionFrom()
     {
-        return $this->belongsTo(Wallet::class, 'fk_transaction_from_id');
+        return $this->belongsTo(TransactionFrom::class, 'fk_transaction_from_id');
     }
 }

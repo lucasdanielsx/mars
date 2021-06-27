@@ -3,52 +3,26 @@
 namespace App\Consumers;
 
 use App\Helpers\Enums\EventType;
+use App\Helpers\Enums\Queue;
+use App\Helpers\Enums\TransactionStatus;
 use App\Helpers\Sqs\SqsHelper;
 use App\Helpers\Sqs\SqsUsEast1Client;
-use App\Models\Event;
 use App\Models\TransactionFrom;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Ramsey\Uuid\Uuid;
 
 class TransactionPaidConsumer extends Consumer
 {
     /**
-     * @param TransactionFrom $transaction
-     * @return array
+     * @param $transactionFrom
      */
-    private function authorize(TransactionFrom $transaction): array
+    private function updateAll($transactionFrom): void
     {
-        try {
-            $response = Http::get(env('AUTHORIZER_URL'));
-
-            list($event, $queue) = $this->mountEvent($transaction, json_decode($response->body(), true), $response->status());
-        } catch (\Throwable $e) {
-            Log::error("Error trying authorize transaction " . $transaction->id, [$e->getTraceAsString()]);
-
-            list($event, $queue) = $this->mountEvent($transaction, ["error" => $e->getMessage()], 500);
-        }
-
-        return [$event, $queue];
-    }
-
-    /**
-     * @param TransactionFrom $transaction
-     * @param array $message
-     * @param int $statusCode
-     * @return array
-     */
-    private function mountEvent(TransactionFrom $transaction, array $message, int $statusCode)
-    {
-        list($type, $queue) = ($statusCode == 200) ? ['transaction_authorized', 'transaction_paid'] : ['transaction_not_authorized', 'transaction_not_paid'];
-
-        $event = new Event();
-        $event->id = Uuid::uuid4();
-        $event->fk_transaction_id = $transaction->id;
-        $event->type = $type;
-        $event->payload = json_encode($message, true);
-
-        return [$event, $queue];
+        DB::transaction(function () use ($transactionFrom) {
+            $transactionFrom->update();
+            $transactionFrom->transactionTo->update();
+            $transactionFrom->transactionTo->wallet->update();
+        });
     }
 
     public function process()
@@ -56,20 +30,26 @@ class TransactionPaidConsumer extends Consumer
         Log::info("Starting " . self::class . " process");
 
         $sqsHelper = new SqsHelper(new SqsUsEast1Client());
-        $messages = $sqsHelper->getMessages(EventType::TRANSACTION_PAID);
+        $messages = $sqsHelper->getMessages(Queue::TRANSACTION_PAID);
 
         foreach ($messages->get('Messages') as $index => $message) {
             try {
-                $transaction = new TransactionFrom(json_decode($message['Body'], true));
+                $body = new TransactionFrom(json_decode($message['Body'], true));
 
-                $event->save();
+                $transactionFrom = TransactionFrom::where('id', $body->id)->first();
+                $transactionFrom->status = TransactionStatus::PAID;
+                var_dump($transactionFrom->transactionTo->status);
+                $transactionFrom->transactionTo->status = TransactionStatus::PAID;
+                $transactionFrom->transactionTo->wallet->amount += $transactionFrom->transactionTo->amount;
 
-                $sqsHelper->sendMessage($queue, $transaction->toArray());
+                $this->updateAll($transactionFrom);
+
+                $sqsHelper->sendMessage(Queue::NOTIFY_CLIENT, $transactionFrom->toArray());
                 $sqsHelper->deleteMessage(EventType::TRANSACTION_PAID, $messages, $index);
 
-                Log::info("TransactionFrom " . $transaction->id . " was authorized");
+                Log::info("TransactionFrom " . $transactionFrom->id . " was authorized");
             } catch (\Throwable $e) {
-                Log::error("Error trying process transaction", [$e->getTraceAsString()]);
+                Log::error("Error trying process transaction" . $e->getMessage(), [$e->getTraceAsString()]);
 
                 continue;
             }

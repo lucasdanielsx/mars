@@ -9,6 +9,8 @@ use App\Helpers\Sqs\SqsUsEast1Client;
 use App\Http\Clients\Authorizers\DefaultAuthorizerClient;
 use App\Models\Event;
 use App\Models\TransactionFrom;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Ramsey\Uuid\Uuid;
 use Throwable;
@@ -16,24 +18,48 @@ use Throwable;
 class AuthorizeTransactionConsumer extends Consumer
 {
     /**
+     * @param $eventAuthorization
+     * @param $event
+     */
+    private function saveAll($eventAuthorization, $event): void
+    {
+        DB::transaction(function () use ($eventAuthorization, $event) {
+            $eventAuthorization->save();
+            $event->save();
+        });
+    }
+
+    /**
      * @param TransactionFrom $transaction
      * @param array $payload
      * @param int $statusCode
      * @param string $messageId
      * @return array
      */
-    private function convertEvent(TransactionFrom $transaction, array $payload, int $statusCode, string $messageId)
+    private function convertEvents(TransactionFrom $transaction, array $payload, int $statusCode, string $messageId)
     {
-        list($type, $queue) = ($statusCode == 200) ? [EventType::TRANSACTION_AUTHORIZED, Queue::TRANSACTION_PAID] : [EventType::TRANSACTION_AUTHORIZED, Queue::TRANSACTION_NOT_PAID];
+        $eventAuthorization = new Event();
+        $eventAuthorization->id = Uuid::uuid4();
+        $eventAuthorization->fkTransactionFromId = $transaction->id;
+        $eventAuthorization->payload = json_encode($payload);
+        $eventAuthorization->messageId = $messageId;
+        $eventAuthorization->type = EventType::TRANSACTION_AUTHORIZED;
 
         $event = new Event();
         $event->id = Uuid::uuid4();
         $event->fkTransactionFromId = $transaction->id;
-        $event->type = $type;
-        $event->payload = json_encode($payload);
+        $event->payload = json_encode([]);
         $event->messageId = $messageId;
+        $event->type = EventType::TRANSACTION_PAID;
 
-        return [$event, $queue];
+        if ($statusCode == 200) {
+            return [$eventAuthorization, $event, Queue::TRANSACTION_PAID];
+        }
+
+        $eventAuthorization->type = EventType::TRANSACTION_NOT_AUTHORIZED;
+        $event->type = EventType::TRANSACTION_NOT_PAID;
+
+        return [$eventAuthorization, $event, Queue::TRANSACTION_NOT_PAID];
     }
 
     public function process()
@@ -50,9 +76,9 @@ class AuthorizeTransactionConsumer extends Consumer
                 $client = new DefaultAuthorizerClient();
                 $response = $client->authorize($transaction);
 
-                list($event, $queue) = $this->convertEvent($transaction, json_decode($response->body(), true), $response->status(), $message['MessageId']);
+                list($eventAuthorization, $event, $queue) = $this->convertEvents($transaction, json_decode($response->body(), true), $response->status(), $message['MessageId']);
 
-                $event->save();
+                $this->saveAll($eventAuthorization, $event);
 
                 $sqsHelper->sendMessage($queue, $transaction->toArray());
                 $sqsHelper->deleteMessage(Queue::AUTHORIZE_TRANSACTION, $messages, $index);

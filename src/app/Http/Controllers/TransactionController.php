@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Consumers\AuthorizeTransactionConsumer;
+use App\Consumers\TransactionPaidConsumer;
 use App\Helpers\Enums\TransactionStatus;
 use App\Helpers\Enums\UserType;
 use App\Helpers\Sqs\SqsHelper;
@@ -53,7 +54,6 @@ class TransactionController extends Controller
         DB::transaction(function () use ($transactionFrom, $transactionTo, $userFrom) {
             $transactionFrom->save();
             $transactionTo->save();
-            $userFrom->wallet->amount = $userFrom->wallet->amount - $transactionFrom->amount;
             $userFrom->wallet->update();
         });
     }
@@ -152,18 +152,22 @@ class TransactionController extends Controller
 
             list($transactionFrom, $transactionTo) = $this->convertTransaction($userFrom, $userTo, $request);
 
+            $userFrom->wallet->amount -= $transactionFrom->amount;
+
             $this->saveAll($transactionFrom, $transactionTo, $userFrom);
 
             $this->publish('mars-authorize_transaction', $transactionFrom->toArray());
             $test = new AuthorizeTransactionConsumer();
+            $test2 = new TransactionPaidConsumer();
             $test->process();
+            $test2->process();
             Log::info('TransactionFrom ' . $transactionFrom->id . ' was created');
 
             return $this->response('Success', $transactionFrom->toArray(), 201);
         } catch (Throwable $e) {
             Log::error("Error trying create a new transaction. MESSAGE: " . $e->getMessage(), [$e->getTraceAsString()]);
 
-            return $this->response('Internal server error', [], 500);
+            return $this->response('Internal server error' . $e->getMessage(), [], 500);
         }
     }
 }
