@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Consumers\AuthorizeTransactionConsumer;
+use App\Consumers\TransactionNotPaidConsumer;
 use App\Consumers\TransactionPaidConsumer;
 use App\Helpers\Enums\TransactionStatus;
 use App\Helpers\Enums\UserType;
@@ -158,7 +159,7 @@ class TransactionController extends Controller
 
             $this->publish('mars-authorize_transaction', $transactionFrom->toArray());
             $test = new AuthorizeTransactionConsumer();
-            $test2 = new TransactionPaidConsumer();
+            $test2 = new TransactionNotPaidConsumer();
             $test->process();
             $test2->process();
             Log::info('TransactionFrom ' . $transactionFrom->id . ' was created');

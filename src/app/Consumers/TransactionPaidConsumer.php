@@ -7,6 +7,7 @@ use App\Helpers\Enums\TransactionStatus;
 use App\Helpers\Sqs\SqsHelper;
 use App\Helpers\Sqs\SqsUsEast1Client;
 use App\Models\TransactionFrom;
+use Aws\Result;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -14,7 +15,19 @@ use Throwable;
 class TransactionPaidConsumer extends Consumer
 {
     /**
+     * @param SqsHelper $sqsHelper
      * @param $transactionFrom
+     * @param Result $messages
+     * @param $index
+     */
+    private function notifyQueue(SqsHelper $sqsHelper, $transactionFrom, Result $messages, $index): void
+    {
+        $this->sendMessage(Queue::NOTIFY_CLIENT, $sqsHelper, $transactionFrom->toArray());
+        $this->deleteMessage(Queue::TRANSACTION_PAID, $sqsHelper, $messages, $index,);
+    }
+
+    /**
+     * @param TransactionFrom $transactionFrom
      */
     private function updateAll(TransactionFrom $transactionFrom): void
     {
@@ -30,16 +43,16 @@ class TransactionPaidConsumer extends Consumer
         Log::info("Starting " . self::class . " process");
 
         $sqsHelper = new SqsHelper(new SqsUsEast1Client());
-        $messages = $sqsHelper->getMessages(Queue::TRANSACTION_PAID);
+        $messages = $this->getMessages(Queue::TRANSACTION_PAID, $sqsHelper);
 
         foreach ($messages->get('Messages') as $index => $message) {
             try {
-                $body = new TransactionFrom(json_decode($message['Body'], true));
+                $transactionFrom = $this->validAndGetBodyMessage($message['Body']);
 
-                $transactionFrom = TransactionFrom::find($body->id)->first();
+                if ($transactionFrom->status == TransactionStatus::PAID) {
+                    Log::error("Transaction " . $transactionFrom->id . " is already processed");
 
-                if (empty($transactionFrom)) {
-                    Log::error("Error trying process transaction: Transaction . " . $body->id . " not found");
+                    $this->notifyQueue($sqsHelper, $transactionFrom, $messages, $index);
 
                     continue;
                 }
@@ -50,15 +63,16 @@ class TransactionPaidConsumer extends Consumer
 
                 $this->updateAll($transactionFrom);
 
-                $sqsHelper->sendMessage(Queue::NOTIFY_CLIENT, $transactionFrom->toArray());
-                $sqsHelper->deleteMessage(Queue::TRANSACTION_PAID, $messages, $index);
+                $this->notifyQueue($sqsHelper, $transactionFrom, $messages, $index);
 
-                Log::info("TransactionFrom " . $transactionFrom->id . " was authorized");
+                Log::info("Transaction " . $transactionFrom->id . " was processed");
             } catch (Throwable $e) {
                 Log::error("Error trying process transaction: " . $e->getMessage(), [$e->getTraceAsString()]);
 
                 continue;
             }
         }
+
+        Log::info("Finished " . self::class . " process");
     }
 }

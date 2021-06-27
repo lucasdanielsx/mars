@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Clients\Authorizers;
+namespace App\ExternalClients\Authorizers;
 
 use App\Models\TransactionFrom;
 use Illuminate\Http\Client\Response;

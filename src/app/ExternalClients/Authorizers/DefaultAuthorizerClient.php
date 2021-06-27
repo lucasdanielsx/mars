@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Clients\Notifiers;
+namespace App\ExternalClients\Authorizers;
 
 use App\Models\TransactionFrom;
 use Illuminate\Http\Client\Response;
@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
-class DefaultNotifierClient implements AuthorizerInterface
+class DefaultAuthorizerClient implements AuthorizerInterface
 {
     /**
      * @param TransactionFrom $transaction

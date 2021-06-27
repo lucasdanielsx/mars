@@ -2,54 +2,27 @@
 
 namespace App\Consumers;
 
-use App\Helpers\Enums\EventType;
-use App\Helpers\SqsHelper;
-use App\Helpers\SqsUsEast1Client;
-use App\Models\Event;
+use App\Helpers\Enums\Queue;
+use App\Helpers\Enums\TransactionStatus;
+use App\Helpers\Sqs\SqsHelper;
+use App\Helpers\Sqs\SqsUsEast1Client;
 use App\Models\TransactionFrom;
-use Aws\Sqs\SqsClient;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Ramsey\Uuid\Uuid;
+use Throwable;
 
 class TransactionNotPaidConsumer extends Consumer
 {
     /**
-     * @param TransactionFrom $transaction
-     * @return array
+     * @param TransactionFrom $transactionFrom
      */
-    private function authorize(TransactionFrom $transaction): array
+    private function updateAll(TransactionFrom $transactionFrom): void
     {
-        try {
-            $response = Http::get(env('AUTHORIZER_URL'));
-
-            list($event, $queue) = $this->mountEvent($transaction, json_decode($response->body(), true), $response->status());
-        } catch (\Throwable $e) {
-            Log::error("Error trying authorize transaction " . $transaction->id, [$e->getTraceAsString()]);
-
-            list($event, $queue) = $this->mountEvent($transaction, ["error" => $e->getMessage()], 500);
-        }
-
-        return [$event, $queue];
-    }
-
-    /**
-     * @param TransactionFrom $transaction
-     * @param array $message
-     * @param int $statusCode
-     * @return array
-     */
-    private function mountEvent(TransactionFrom $transaction, array $message, int $statusCode)
-    {
-        list($type, $queue) = ($statusCode == 200) ? ['transaction_authorized', 'transaction_paid'] : ['transaction_not_authorized', 'transaction_not_paid'];
-
-        $event = new Event();
-        $event->id = Uuid::uuid4();
-        $event->fk_transaction_id = $transaction->id;
-        $event->type = $type;
-        $event->payload = json_encode($message, true);
-
-        return [$event, $queue];
+        DB::transaction(function () use ($transactionFrom) {
+            $transactionFrom->update();
+            $transactionFrom->transaction->update();
+            $transactionFrom->transaction->wallet->update();
+        });
     }
 
     public function process()
@@ -57,25 +30,36 @@ class TransactionNotPaidConsumer extends Consumer
         Log::info("Starting " . self::class . " process");
 
         $sqsHelper = new SqsHelper(new SqsUsEast1Client());
-        $messages = $sqsHelper->getMessages('mars-transaction_not_paid');
+        $messages = $this->getMessages(Queue::TRANSACTION_NOT_PAID, $sqsHelper);
 
         foreach ($messages->get('Messages') as $index => $message) {
             try {
-                $transaction = new TransactionFrom(json_decode($message['Body'], true));
-                $event = null;
+                $transactionFrom = $this->validAndGetBodyMessage($message['Body']);
 
-                list($event, $queue) = $this->authorize($transaction);
-                $event->save();
+                if ($transactionFrom->status == TransactionStatus::NOT_PAID) {
+                    Log::error("Transaction . " . $transactionFrom->id . " is already processed");
 
-                $sqsHelper->sendMessage($queue, $transaction->toArray());
-                $sqsHelper->deleteMessage(EventType::AUTHORIZE_TRANSACTION, $messages, $index);
+                    $this->notifyQueue(Queue::NOTIFY_CLIENT, Queue::TRANSACTION_NOT_PAID, $sqsHelper, $transactionFrom, $messages, $index);
 
-                Log::info("TransactionFrom " . $transaction->id . " was authorized");
-            } catch (\Throwable $e) {
-                Log::error("Error trying process transaction", [$e->getTraceAsString()]);
+                    continue;
+                }
+
+                $transactionFrom->status = TransactionStatus::NOT_PAID;
+                $transactionFrom->transaction->status = TransactionStatus::NOT_PAID;
+                $transactionFrom->wallet->amount -= $transactionFrom->transaction->amount;
+
+                $this->updateAll($transactionFrom);
+
+                $this->notifyQueue(Queue::NOTIFY_CLIENT, Queue::TRANSACTION_NOT_PAID, $sqsHelper, $transactionFrom, $messages, $index);
+
+                Log::info("Transaction " . $transactionFrom->id . " was processed");
+            } catch (Throwable $e) {
+                Log::error("Error trying process transaction: " . $e->getMessage(), [$e->getTraceAsString()]);
 
                 continue;
             }
         }
+
+        Log::info("Finished " . self::class . " process");
     }
 }

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Clients\Notifiers;
+namespace App\ExternalClients\Notifiers;
 
 use App\Models\TransactionFrom;
 use Illuminate\Http\Client\Response;
