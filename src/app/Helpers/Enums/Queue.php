@@ -2,7 +2,7 @@
 
 namespace App\Helpers\Enums;
 
-abstract class Queues extends EnumBase
+abstract class Queue extends EnumBase
 {
     const AUTHORIZE_TRANSACTION = 'mars-authorize_transaction';
     const NOTIFY_CLIENT = 'mars-notify_client';

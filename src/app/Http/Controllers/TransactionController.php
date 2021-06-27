@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Consumers\AuthorizeTransactionConsumer;
 use App\Helpers\Enums\TransactionStatus;
+use App\Helpers\Enums\UserType;
 use App\Helpers\Sqs\SqsHelper;
 use App\Helpers\Sqs\SqsUsEast1Client;
 use App\Models\TransactionFrom;
@@ -77,7 +78,7 @@ class TransactionController extends Controller
         if (empty($userFrom))
             return $this->response('Payer not exist', [], 400);
 
-        if ($userFrom->type != "CUSTOMER")
+        if ($userFrom->type != UserType::CUSTOMER)
             return $this->response("Payer isn't allowed to make transactions", [], 403);
 
         if ($userFrom->wallet->amount <= $amount)
@@ -146,7 +147,7 @@ class TransactionController extends Controller
 
             $rules = $this->userRules($userFrom, $userTo, $request['amount']);
 
-            if ($rules instanceof Boolean)
+            if ($rules)
                 return $rules;
 
             list($transactionFrom, $transactionTo) = $this->convertTransaction($userFrom, $userTo, $request);

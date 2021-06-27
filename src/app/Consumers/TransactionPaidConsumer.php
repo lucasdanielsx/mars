@@ -2,7 +2,7 @@
 
 namespace App\Consumers;
 
-use App\Helpers\Enums\TransactionStatus;
+use App\Helpers\Enums\EventType;
 use App\Helpers\Sqs\SqsHelper;
 use App\Helpers\Sqs\SqsUsEast1Client;
 use App\Models\Event;
@@ -56,7 +56,7 @@ class TransactionPaidConsumer extends Consumer
         Log::info("Starting " . self::class . " process");
 
         $sqsHelper = new SqsHelper(new SqsUsEast1Client());
-        $messages = $sqsHelper->getMessages(TransactionStatus::TRANSACTION_PAID);
+        $messages = $sqsHelper->getMessages(EventType::TRANSACTION_PAID);
 
         foreach ($messages->get('Messages') as $index => $message) {
             try {
@@ -65,7 +65,7 @@ class TransactionPaidConsumer extends Consumer
                 $event->save();
 
                 $sqsHelper->sendMessage($queue, $transaction->toArray());
-                $sqsHelper->deleteMessage(TransactionStatus::TRANSACTION_PAID, $messages, $index);
+                $sqsHelper->deleteMessage(EventType::TRANSACTION_PAID, $messages, $index);
 
                 Log::info("TransactionFrom " . $transaction->id . " was authorized");
             } catch (\Throwable $e) {

@@ -12,7 +12,7 @@ class Event extends BaseModel
     private $fkTransactionFromId;
     private $type;
     private $payload;
-    private $message_id;
+    private $messageId;
     private $createdAt;
     private $updatedAt;
 
