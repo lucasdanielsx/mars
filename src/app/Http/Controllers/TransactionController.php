@@ -81,7 +81,7 @@ class TransactionController extends Controller
         if ($userFrom->type != UserType::CUSTOMER)
             return $this->response("Payer isn't allowed to make transactions", [], 403);
 
-        if ($userFrom->wallet->amount <= $amount)
+        if ($userFrom->wallet->amount < $amount)
             return $this->response("Insufficient funds", [], 400);
 
         if (empty($userTo))

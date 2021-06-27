@@ -52,7 +52,7 @@ class TransactionTo extends BaseModel
     /**
      * @return BelongsTo
      */
-    public function transactionFrom()
+    public function transaction()
     {
         return $this->belongsTo(TransactionFrom::class, 'fk_transaction_from_id', 'id');
     }

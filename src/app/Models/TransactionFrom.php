@@ -51,7 +51,7 @@ class TransactionFrom extends BaseModel
     /**
      * @return HasOne
      */
-    public function transactionTo()
+    public function transaction()
     {
         return $this->hasOne(TransactionTo::class, 'fk_transaction_from_id');
     }

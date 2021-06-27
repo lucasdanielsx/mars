@@ -16,12 +16,12 @@ class TransactionPaidConsumer extends Consumer
     /**
      * @param $transactionFrom
      */
-    private function updateAll($transactionFrom, $transactionTo, $wallet): void
+    private function updateAll(TransactionFrom $transactionFrom): void
     {
-        DB::transaction(function () use ($transactionFrom, $transactionTo, $wallet) {
+        DB::transaction(function () use ($transactionFrom) {
             $transactionFrom->update();
-            $transactionTo->update();
-            $wallet->update();
+            $transactionFrom->transaction->update();
+            $transactionFrom->transaction->wallet->update();
         });
     }
 
@@ -36,23 +36,26 @@ class TransactionPaidConsumer extends Consumer
             try {
                 $body = new TransactionFrom(json_decode($message['Body'], true));
 
-                $transactionFrom = TransactionFrom::where('id', $body->id)->first();
+                $transactionFrom = TransactionFrom::find($body->id)->first();
+
+                if (empty($transactionFrom)) {
+                    Log::error("Error trying process transaction: Transaction . " . $body->id . " not found");
+
+                    continue;
+                }
+
                 $transactionFrom->status = TransactionStatus::PAID;
-                $transactionFrom->update();
+                $transactionFrom->transaction->status = TransactionStatus::PAID;
+                $transactionFrom->transaction->wallet->amount += $transactionFrom->transaction->amount;
 
-                $transactionFrom->transactionTo->status = TransactionStatus::PAID;
-                $transactionFrom->transactionTo->update();
-
-                $transactionFrom->transactionTo->wallet->amount += $transactionFrom->transactionTo->amount;
-                $transactionFrom->transactionTo->wallet->update();
-//                $this->updateAll($transactionFrom, $transactionTo, $wallet);
+                $this->updateAll($transactionFrom);
 
                 $sqsHelper->sendMessage(Queue::NOTIFY_CLIENT, $transactionFrom->toArray());
                 $sqsHelper->deleteMessage(Queue::TRANSACTION_PAID, $messages, $index);
 
                 Log::info("TransactionFrom " . $transactionFrom->id . " was authorized");
             } catch (Throwable $e) {
-                Log::error("Error trying process transaction" . $e->getMessage(), [$e->getTraceAsString()]);
+                Log::error("Error trying process transaction: " . $e->getMessage(), [$e->getTraceAsString()]);
 
                 continue;
             }
