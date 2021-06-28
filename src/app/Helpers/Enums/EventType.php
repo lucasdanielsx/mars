@@ -9,4 +9,5 @@ abstract class EventType extends EnumBase
     const TRANSACTION_PAID = 'transaction_paid';
     const TRANSACTION_NOT_PAID = 'transaction_not_paid';
     const TRANSACTION_NOTIFIED = 'transaction_notified';
+    const TRANSACTION_ERROR = 'transaction_error';
 }

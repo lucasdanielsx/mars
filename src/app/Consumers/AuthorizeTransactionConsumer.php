@@ -9,6 +9,7 @@ use App\Helpers\Sqs\SqsUsEast1Client;
 use App\ExternalClients\Authorizers\DefaultAuthorizerClient;
 use App\Models\Event;
 use App\Models\TransactionFrom;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Ramsey\Uuid\Uuid;
@@ -76,9 +77,9 @@ class AuthorizeTransactionConsumer extends Consumer
 
         if (!empty($messages->get('Messages'))) {
             foreach ($messages->get('Messages') as $index => $message) {
+                $transactionFrom = $this->validAndGetBodyMessage($message['Body']);
+
                 try {
-                    $transactionFrom = $this->validAndGetBodyMessage($message['Body']);
-echo $transactionFrom->events;
                     $types = array_map('type', $transactionFrom->events);
 
                     if (in_array(EventType::TRANSACTION_AUTHORIZED, $types)) {
@@ -109,6 +110,8 @@ echo $transactionFrom->events;
                     Log::info("Transaction " . $transactionFrom->id . " was authorized");
                 } catch (Throwable $e) {
                     Log::error("Error trying process transaction " . $e->getMessage(), [$e->getTraceAsString()]);
+
+                    $this->notifyQueueAndRemoveMessage(Queue::TRANSACTION_NOT_PAID, Queue::AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
 
                     continue;
                 }

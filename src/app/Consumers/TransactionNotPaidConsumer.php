@@ -27,6 +27,7 @@ class TransactionNotPaidConsumer extends Consumer
             $transactionFrom->update();
             $transactionFrom->transaction->update();
             $transactionFrom->transaction->wallet->update();
+            $transactionFrom->wallet->update();
         });
     }
 
@@ -52,7 +53,7 @@ class TransactionNotPaidConsumer extends Consumer
 
                     $transactionFrom->status = TransactionStatus::NOT_PAID;
                     $transactionFrom->transaction->status = TransactionStatus::NOT_PAID;
-                    $transactionFrom->wallet->amount -= $transactionFrom->transaction->amount;
+                    $transactionFrom->wallet->amount += $transactionFrom->transaction->amount;
 
                     $this->updateAll($transactionFrom);
 
