@@ -36,7 +36,7 @@ abstract class Consumer
      * @param Result $messages
      * @param $index
      */
-    protected function notifyQueue(string $queueToSend, string $queueToDelete, SqsHelper $sqsHelper, TransactionFrom $transactionFrom, Result $messages, $index): void
+    protected function notifyQueueAndRemoveMessage(string $queueToSend, string $queueToDelete, SqsHelper $sqsHelper, TransactionFrom $transactionFrom, Result $messages, $index): void
     {
         $this->sendMessage($queueToSend, $sqsHelper, $transactionFrom->toArray());
         $this->deleteMessage($queueToDelete, $sqsHelper, $messages, $index);

@@ -2,52 +2,35 @@
 
 namespace App\Consumers;
 
-use App\Helpers\SqsHelper;
-use App\Helpers\SqsUsEast1Client;
+use App\ExternalClients\Notifiers\DefaultNotifierClient;
+use App\Helpers\Enums\EventType;
+use App\Helpers\Enums\Queue;
+use App\Helpers\Sqs\SqsHelper;
+use App\Helpers\Sqs\SqsUsEast1Client;
 use App\Models\Event;
 use App\Models\TransactionFrom;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Ramsey\Uuid\Uuid;
+use Throwable;
 
 class NotifyClientConsumer extends Consumer
 {
     /**
      * @param TransactionFrom $transaction
-     * @return array
-     */
-    private function authorize(TransactionFrom $transaction): array
-    {
-        try {
-            $response = Http::get(env('AUTHORIZER_URL'));
-
-            list($event, $queue) = $this->mountEvent($transaction, json_decode($response->body(), true), $response->status());
-        } catch (\Throwable $e) {
-            Log::error("Error trying authorize transaction " . $transaction->id, [$e->getTraceAsString()]);
-
-            list($event, $queue) = $this->mountEvent($transaction, ["error" => $e->getMessage()], 500);
-        }
-
-        return [$event, $queue];
-    }
-
-    /**
-     * @param TransactionFrom $transaction
      * @param array $message
-     * @param int $statusCode
-     * @return array
+     * @param string $messageId
+     * @return Event
      */
-    private function mountEvent(TransactionFrom $transaction, array $message, int $statusCode)
+    private function convertEvent(TransactionFrom $transaction, array $message, string $messageId): Event
     {
-        list($type, $queue) = ($statusCode == 200) ? ['transaction_authorized', 'transaction_paid'] : ['transaction_not_authorized', 'transaction_not_paid'];
-
         $event = new Event();
         $event->id = Uuid::uuid4();
-        $event->fk_transaction_id = $transaction->id;
-        $event->type = $type;
+        $event->fkTransactionFromId = $transaction->id;
+        $event->type = EventType::TRANSACTION_NOTIFIED;
         $event->payload = json_encode($message, true);
+        $event->messageId = $messageId;
 
-        return [$event, $queue];
+        return $event;
     }
 
     public function process()
@@ -55,22 +38,40 @@ class NotifyClientConsumer extends Consumer
         Log::info("Starting " . self::class . " process");
 
         $sqsHelper = new SqsHelper(new SqsUsEast1Client());
-        $messages = $sqsHelper->getMessages('mars-notify_client');
+        $messages = $this->getMessages(Queue::NOTIFY_CLIENT, $sqsHelper);
 
         foreach ($messages->get('Messages') as $index => $message) {
             try {
-                $transaction = new TransactionFrom(json_decode($message['Body'], true));
-                $event = null;
+                $transactionFrom = $this->validAndGetBodyMessage($message['Body']);
 
-                list($event, $queue) = $this->authorize($transaction);
+                $types = array_map('type', $transactionFrom->events);
+
+                if (in_array(EventType::TRANSACTION_NOTIFIED, $types)) {
+                    Log::error("Transaction . " . $transactionFrom->id . " is already processed");
+
+                    $this->deleteMessage(Queue::NOTIFY_CLIENT, $sqsHelper, $messages, $index);
+
+                    continue;
+                }
+
+                $client = new DefaultNotifierClient();
+                $response = $client->notify($transactionFrom);
+
+                if($response->status() != 200) {
+                    Log::error("Error trying notify transaction " . $transactionFrom->id);
+
+                    continue;
+                }
+
+                $event = $this->convertEvent($transactionFrom, json_decode($response->body(), true), $message['MessageId']);
+
                 $event->save();
 
-                $sqsHelper->sendMessage($queue, $transaction->toArray());
-                $sqsHelper->deleteMessage('mars-authorize_transaction', $messages, $index);
+                $this->deleteMessage(Queue::NOTIFY_CLIENT, $sqsHelper, $messages, $index);
 
-                Log::info("TransactionFrom " . $transaction->id . " was authorized");
-            } catch (\Throwable $e) {
-                Log::error("Error trying process transaction", [$e->getTraceAsString()]);
+                Log::info("Transaction " . $transactionFrom->id . " was authorized");
+            } catch (Throwable $e) {
+                Log::error("Error trying process transaction " . $e->getMessage(), [$e->getTraceAsString()]);
 
                 continue;
             }

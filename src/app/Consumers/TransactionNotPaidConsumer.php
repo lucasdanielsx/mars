@@ -39,7 +39,7 @@ class TransactionNotPaidConsumer extends Consumer
                 if ($transactionFrom->status == TransactionStatus::NOT_PAID) {
                     Log::error("Transaction . " . $transactionFrom->id . " is already processed");
 
-                    $this->notifyQueue(Queue::NOTIFY_CLIENT, Queue::TRANSACTION_NOT_PAID, $sqsHelper, $transactionFrom, $messages, $index);
+                    $this->notifyQueueAndRemoveMessage(Queue::NOTIFY_CLIENT, Queue::TRANSACTION_NOT_PAID, $sqsHelper, $transactionFrom, $messages, $index);
 
                     continue;
                 }
@@ -50,7 +50,7 @@ class TransactionNotPaidConsumer extends Consumer
 
                 $this->updateAll($transactionFrom);
 
-                $this->notifyQueue(Queue::NOTIFY_CLIENT, Queue::TRANSACTION_NOT_PAID, $sqsHelper, $transactionFrom, $messages, $index);
+                $this->notifyQueueAndRemoveMessage(Queue::NOTIFY_CLIENT, Queue::TRANSACTION_NOT_PAID, $sqsHelper, $transactionFrom, $messages, $index);
 
                 Log::info("Transaction " . $transactionFrom->id . " was processed");
             } catch (Throwable $e) {

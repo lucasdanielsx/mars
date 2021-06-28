@@ -78,7 +78,7 @@ class AuthorizeTransactionConsumer extends Consumer
                 if (in_array(EventType::TRANSACTION_AUTHORIZED, $types)) {
                     Log::error("Transaction . " . $transactionFrom->id . " is already processed");
 
-                    $this->notifyQueue(Queue::TRANSACTION_PAID, Queue::AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
+                    $this->notifyQueueAndRemoveMessage(Queue::TRANSACTION_PAID, Queue::AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
 
                     continue;
                 }
@@ -86,7 +86,7 @@ class AuthorizeTransactionConsumer extends Consumer
                 if (in_array(EventType::TRANSACTION_NOT_AUTHORIZED, $types)) {
                     Log::error("Transaction . " . $transactionFrom->id . " is already processed");
 
-                    $this->notifyQueue(Queue::TRANSACTION_NOT_PAID, Queue::AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
+                    $this->notifyQueueAndRemoveMessage(Queue::TRANSACTION_NOT_PAID, Queue::AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
 
                     continue;
                 }
@@ -98,7 +98,7 @@ class AuthorizeTransactionConsumer extends Consumer
 
                 $this->saveAll($eventAuthorization, $event);
 
-                $this->notifyQueue($queue, Queue::AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
+                $this->notifyQueueAndRemoveMessage($queue, Queue::AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
 
                 Log::info("Transaction " . $transactionFrom->id . " was authorized");
             } catch (Throwable $e) {

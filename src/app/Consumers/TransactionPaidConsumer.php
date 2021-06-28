@@ -7,25 +7,12 @@ use App\Helpers\Enums\TransactionStatus;
 use App\Helpers\Sqs\SqsHelper;
 use App\Helpers\Sqs\SqsUsEast1Client;
 use App\Models\TransactionFrom;
-use Aws\Result;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class TransactionPaidConsumer extends Consumer
 {
-    /**
-     * @param SqsHelper $sqsHelper
-     * @param $transactionFrom
-     * @param Result $messages
-     * @param $index
-     */
-    private function notifyQueue(SqsHelper $sqsHelper, $transactionFrom, Result $messages, $index): void
-    {
-        $this->sendMessage(Queue::NOTIFY_CLIENT, $sqsHelper, $transactionFrom->toArray());
-        $this->deleteMessage(Queue::TRANSACTION_PAID, $sqsHelper, $messages, $index,);
-    }
-
     /**
      * @param TransactionFrom $transactionFrom
      */
@@ -52,7 +39,7 @@ class TransactionPaidConsumer extends Consumer
                 if ($transactionFrom->status == TransactionStatus::PAID) {
                     Log::error("Transaction " . $transactionFrom->id . " is already processed");
 
-                    $this->notifyQueue($sqsHelper, $transactionFrom, $messages, $index);
+                    $this->notifyQueueAndRemoveMessage(Queue::NOTIFY_CLIENT, Queue::TRANSACTION_PAID, $sqsHelper, $transactionFrom, $messages, $index);
 
                     continue;
                 }
@@ -63,7 +50,7 @@ class TransactionPaidConsumer extends Consumer
 
                 $this->updateAll($transactionFrom);
 
-                $this->notifyQueue($sqsHelper, $transactionFrom, $messages, $index);
+                $this->notifyQueueAndRemoveMessage(Queue::NOTIFY_CLIENT, Queue::TRANSACTION_PAID, $sqsHelper, $transactionFrom, $messages, $index);
 
                 Log::info("Transaction " . $transactionFrom->id . " was processed");
             } catch (Throwable $e) {

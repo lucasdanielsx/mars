@@ -8,17 +8,17 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
-class DefaultNotifierClient implements AuthorizerInterface
+class DefaultNotifierClient implements NotifierInterface
 {
     /**
      * @param TransactionFrom $transaction
      * @return Response
      * @throws Throwable
      */
-    public function authorize(TransactionFrom $transaction): Response
+    public function notify(TransactionFrom $transaction): Response
     {
         try {
-            return Http::get(env('DEFAULT_AUTHORIZER_URL'));
+            return Http::get(env('DEFAULT_NOTIFIER_URL'));
         } catch (Throwable $e) {
             Log::error("Error trying authorize transaction " . $transaction->getId(), [$e->getTraceAsString()]);
 
