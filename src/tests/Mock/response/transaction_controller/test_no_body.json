@@ -1,0 +1,15 @@
+{
+    "message": "",
+    "items": {
+        "payer": [
+            "The payer field is required."
+        ],
+        "payee": [
+            "The payee field is required."
+        ],
+        "amount": [
+            "The amount field is required."
+        ]
+    },
+    "status": 400
+}

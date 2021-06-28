@@ -1,0 +1,15 @@
+{
+    "items": {
+        "amount": [
+            "The amount field is required."
+        ],
+        "payee": [
+            "The payee must be between 11 and 14 characters."
+        ],
+        "payer": [
+            "The payer field is required."
+        ]
+    },
+    "message": "",
+    "status": 400
+}
