@@ -2,9 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Consumers\AuthorizeTransactionConsumer;
-use App\Consumers\TransactionNotPaidConsumer;
-use App\Consumers\TransactionPaidConsumer;
 use App\Helpers\Enums\TransactionStatus;
 use App\Helpers\Enums\UserType;
 use App\Helpers\Sqs\SqsHelper;
@@ -17,7 +14,6 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-use phpDocumentor\Reflection\Types\Boolean;
 use Ramsey\Uuid\Uuid;
 use Throwable;
 
@@ -158,10 +154,7 @@ class TransactionController extends Controller
             $this->saveAll($transactionFrom, $transactionTo, $userFrom);
 
             $this->publish('mars-authorize_transaction', $transactionFrom->toArray());
-            $test = new AuthorizeTransactionConsumer();
-            $test2 = new TransactionNotPaidConsumer();
-            $test->process();
-            $test2->process();
+
             Log::info('TransactionFrom ' . $transactionFrom->id . ' was created');
 
             return $this->response('Success', $transactionFrom->toArray(), 201);
