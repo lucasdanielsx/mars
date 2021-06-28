@@ -2,10 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
+use Database\Seeders\UserSeeder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class TransactionControllerTest extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_no_body()
     {
         $response = $this->post('/api/v1/transactions');
@@ -57,5 +63,21 @@ class TransactionControllerTest extends TestCase
         $response = $this->post('/api/v1/transactions', $this->getJsonFileRequest('transaction_controller/test_wrong_bodies_6.json'));
         $response->assertStatus(400);
         $response->assertExactJson($this->getJsonFileResponse('transaction_controller/test_wrong_bodies_6.json'));
+    }
+
+    public function test_payer_invalid()
+    {
+        $response = $this->post('/api/v1/transactions', $this->getJsonFileRequest('transaction_controller/test_payer_invalid.json'));
+
+        $response->assertStatus(400);
+        $response->assertExactJson($this->getJsonFileResponse('transaction_controller/test_payer_invalid.json'));
+    }
+
+    public function test_payer_without_funds()
+    {
+        $response = $this->post('/api/v1/transactions', $this->getJsonFileRequest('transaction_controller/test_payer_without_funds.json'));
+
+        $response->assertStatus(400);
+        $response->assertExactJson($this->getJsonFileResponse('transaction_controller/test_payer_without_funds.json'));
     }
 }
