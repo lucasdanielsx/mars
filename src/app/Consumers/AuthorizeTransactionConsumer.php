@@ -16,6 +16,11 @@ use Throwable;
 
 class AuthorizeTransactionConsumer extends Consumer
 {
+    public function __invoke()
+    {
+        $this->process();
+    }
+
     /**
      * @param $eventAuthorization
      * @param $event
@@ -69,43 +74,47 @@ class AuthorizeTransactionConsumer extends Consumer
         $sqsHelper = new SqsHelper(new SqsUsEast1Client());
         $messages = $this->getMessages(Queue::AUTHORIZE_TRANSACTION, $sqsHelper);
 
-        foreach ($messages->get('Messages') as $index => $message) {
-            try {
-                $transactionFrom = $this->validAndGetBodyMessage($message['Body']);
+        if (!empty($messages->get('Messages'))) {
+            foreach ($messages->get('Messages') as $index => $message) {
+                try {
+                    $transactionFrom = $this->validAndGetBodyMessage($message['Body']);
+echo $transactionFrom->events;
+                    $types = array_map('type', $transactionFrom->events);
 
-                $types = array_map('type', $transactionFrom->events);
+                    if (in_array(EventType::TRANSACTION_AUTHORIZED, $types)) {
+                        Log::error("Transaction . " . $transactionFrom->id . " is already processed");
 
-                if (in_array(EventType::TRANSACTION_AUTHORIZED, $types)) {
-                    Log::error("Transaction . " . $transactionFrom->id . " is already processed");
+                        $this->notifyQueueAndRemoveMessage(Queue::TRANSACTION_PAID, Queue::AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
 
-                    $this->notifyQueueAndRemoveMessage(Queue::TRANSACTION_PAID, Queue::AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
+                        continue;
+                    }
+
+                    if (in_array(EventType::TRANSACTION_NOT_AUTHORIZED, $types)) {
+                        Log::error("Transaction . " . $transactionFrom->id . " is already processed");
+
+                        $this->notifyQueueAndRemoveMessage(Queue::TRANSACTION_NOT_PAID, Queue::AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
+
+                        continue;
+                    }
+
+                    $client = new DefaultAuthorizerClient();
+                    $response = $client->authorize($transactionFrom);
+
+                    list($eventAuthorization, $event, $queue) = $this->convertEvents($transactionFrom, json_decode($response->body(), true), $response->status(), $message['MessageId']);
+
+                    $this->saveAll($eventAuthorization, $event);
+
+                    $this->notifyQueueAndRemoveMessage($queue, Queue::AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
+
+                    Log::info("Transaction " . $transactionFrom->id . " was authorized");
+                } catch (Throwable $e) {
+                    Log::error("Error trying process transaction " . $e->getMessage(), [$e->getTraceAsString()]);
 
                     continue;
                 }
-
-                if (in_array(EventType::TRANSACTION_NOT_AUTHORIZED, $types)) {
-                    Log::error("Transaction . " . $transactionFrom->id . " is already processed");
-
-                    $this->notifyQueueAndRemoveMessage(Queue::TRANSACTION_NOT_PAID, Queue::AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
-
-                    continue;
-                }
-
-                $client = new DefaultAuthorizerClient();
-                $response = $client->authorize($transactionFrom);
-
-                list($eventAuthorization, $event, $queue) = $this->convertEvents($transactionFrom, json_decode($response->body(), true), $response->status(), $message['MessageId']);
-
-                $this->saveAll($eventAuthorization, $event);
-
-                $this->notifyQueueAndRemoveMessage($queue, Queue::AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
-
-                Log::info("Transaction " . $transactionFrom->id . " was authorized");
-            } catch (Throwable $e) {
-                Log::error("Error trying process transaction " . $e->getMessage(), [$e->getTraceAsString()]);
-
-                continue;
             }
         }
+
+        Log::info("Finished " . self::class . " process");
     }
 }

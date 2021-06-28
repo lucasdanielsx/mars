@@ -15,6 +15,11 @@ use Throwable;
 
 class NotifyClientConsumer extends Consumer
 {
+    public function __invoke()
+    {
+        $this->process();
+    }
+
     /**
      * @param TransactionFrom $transaction
      * @param array $message
@@ -40,41 +45,45 @@ class NotifyClientConsumer extends Consumer
         $sqsHelper = new SqsHelper(new SqsUsEast1Client());
         $messages = $this->getMessages(Queue::NOTIFY_CLIENT, $sqsHelper);
 
-        foreach ($messages->get('Messages') as $index => $message) {
-            try {
-                $transactionFrom = $this->validAndGetBodyMessage($message['Body']);
+        if (!empty($messages->get('Messages'))) {
+            foreach ($messages->get('Messages') as $index => $message) {
+                try {
+                    $transactionFrom = $this->validAndGetBodyMessage($message['Body']);
 
-                $types = array_map('type', $transactionFrom->events);
+                    $types = array_map('type', $transactionFrom->events);
 
-                if (in_array(EventType::TRANSACTION_NOTIFIED, $types)) {
-                    Log::error("Transaction . " . $transactionFrom->id . " is already processed");
+                    if (in_array(EventType::TRANSACTION_NOTIFIED, $types)) {
+                        Log::error("Transaction . " . $transactionFrom->id . " is already processed");
+
+                        $this->deleteMessage(Queue::NOTIFY_CLIENT, $sqsHelper, $messages, $index);
+
+                        continue;
+                    }
+
+                    $client = new DefaultNotifierClient();
+                    $response = $client->notify($transactionFrom);
+
+                    if ($response->status() != 200) {
+                        Log::error("Error trying notify transaction " . $transactionFrom->id);
+
+                        continue;
+                    }
+
+                    $event = $this->convertEvent($transactionFrom, json_decode($response->body(), true), $message['MessageId']);
+
+                    $event->save();
 
                     $this->deleteMessage(Queue::NOTIFY_CLIENT, $sqsHelper, $messages, $index);
 
-                    continue;
-                }
-
-                $client = new DefaultNotifierClient();
-                $response = $client->notify($transactionFrom);
-
-                if($response->status() != 200) {
-                    Log::error("Error trying notify transaction " . $transactionFrom->id);
+                    Log::info("Transaction " . $transactionFrom->id . " was authorized");
+                } catch (Throwable $e) {
+                    Log::error("Error trying process transaction " . $e->getMessage(), [$e->getTraceAsString()]);
 
                     continue;
                 }
-
-                $event = $this->convertEvent($transactionFrom, json_decode($response->body(), true), $message['MessageId']);
-
-                $event->save();
-
-                $this->deleteMessage(Queue::NOTIFY_CLIENT, $sqsHelper, $messages, $index);
-
-                Log::info("Transaction " . $transactionFrom->id . " was authorized");
-            } catch (Throwable $e) {
-                Log::error("Error trying process transaction " . $e->getMessage(), [$e->getTraceAsString()]);
-
-                continue;
             }
         }
+
+        Log::info("Finished " . self::class . " process");
     }
 }
