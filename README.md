@@ -2,6 +2,13 @@
 
 A simple Laravel application
 
+## Pre requirements
+
+- PHP 7.2 or higher
+- Laravel 8 
+- docker
+- docker-compose
+
 ## How to run?
 
 - composer install
