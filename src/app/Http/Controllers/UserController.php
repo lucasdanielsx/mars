@@ -38,16 +38,12 @@ class UserController extends Controller
 
             return $this->response('Success', $newUser->toArray(), 201);
         } catch (\Throwable $e) {
-            Log::error("Error trying save a new user. MESSAGE: " . $e->getMessage(), [$e->getTraceAsString()]);
+            Log::error("Error trying save a new user. " . $request['name'] . ". " . $e->getTraceAsString());
 
             return $this->response('Internal server error', [], 500);
         }
     }
 
-    /**
-     * @param Request $request
-     * @return \Illuminate\Contracts\Validation\Validator
-     */
     private function validateRequestBody(Request $request): \Illuminate\Contracts\Validation\Validator
     {
         //TODO function to valid cpf or cnpj
@@ -59,10 +55,6 @@ class UserController extends Controller
         ]);
     }
 
-    /**
-     * @param Request $request
-     * @return array (User, Wallet)
-     */
     private function convertUserAndWallet(Request $request): array
     {
         $userId = Uuid::uuid4();
@@ -82,32 +74,11 @@ class UserController extends Controller
         return [$user, $wallet];
     }
 
-    /**
-     * @param User $user
-     * @param Wallet $wallet
-     * @return void
-     */
     private function saveAll(User $user, Wallet $wallet): void
     {
         DB::transaction(function () use ($user, $wallet) {
             $user->save();
             $wallet->save();
         });
-    }
-
-    /**
-     * @param string $message
-     * @param array $items
-     * @param int $statusCode
-     * @return Response
-     */
-    private function response(string $message, array $items, int $statusCode): Response
-    {
-        $response = new Response();
-        $response->setContent(['message' => $message, 'items' => $items, 'status' => $statusCode]);
-        $response->setStatusCode($statusCode);
-        $response->header('Content-Type', 'application/json');
-
-        return $response;
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\Enums\Queue;
 use App\Helpers\Enums\TransactionStatus;
 use App\Helpers\Enums\UserType;
 use App\Helpers\Sqs\SqsHelper;
@@ -19,33 +20,48 @@ use Throwable;
 
 class TransactionController extends Controller
 {
-    /**
-     * @param string $message
-     * @param array $items
-     * @param int $statusCode
-     * @return Response
-     */
-    private function response(string $message, array $items, int $statusCode): Response
+    public function store(Request $request)
     {
-        $response = new Response();
-        $response->setContent(['message' => $message, 'items' => $items, 'status' => $statusCode]);
-        $response->setStatusCode($statusCode);
-        $response->header('Content-Type', 'application/json');
+        Log::info('Creating a new transaction');
 
-        return $response;
+        $validator = $this->validateRequestBody($request);
+
+        if ($validator->fails())
+            return $this->response('', $validator->errors()->toArray(), 400);
+
+        try {
+            $userFrom = $this->getUserByDocumentValue($request['payer']);
+            $userTo = $this->getUserByDocumentValue($request['payee']);
+
+            $rules = $this->isInvalidRequest($userFrom, $userTo, $request['amount']);
+
+            if ($rules)
+                return $rules;
+
+            list($transactionFrom, $transactionTo) = $this->convertTransaction($userFrom, $userTo, $request);
+
+            $userFrom->wallet->amount -= $transactionFrom->amount;
+
+            $this->saveAll($transactionFrom, $transactionTo, $userFrom);
+
+            $this->publish($transactionFrom->toArray());
+
+            Log::info('TransactionFrom ' . $transactionFrom->id . ' was created');
+
+            return $this->response('Success', $transactionFrom->toArray(), 201);
+        } catch (Throwable $e) {
+            Log::error("Error trying create a new transaction from payer " . $request['payer'] . $e->getTraceAsString());
+
+            return $this->response('Internal server error' . $e->getMessage(), [], 500);
+        }
     }
 
-    private function publish(string $queue, array $message): void
+    private function publish(array $message): void
     {
         $sqsHelper = new SqsHelper(new SqsUsEast1Client());
-        $sqsHelper->sendMessage($queue, $message);
+        $sqsHelper->sendMessage(Queue::MARS_AUTHORIZE_TRANSACTION, $message);
     }
 
-    /**
-     * @param TransactionFrom $transactionFrom
-     * @param TransactionTo $transactionTo
-     * @param $userFrom
-     */
     private function saveAll(TransactionFrom $transactionFrom, TransactionTo $transactionTo, $userFrom): void
     {
         DB::transaction(function () use ($transactionFrom, $transactionTo, $userFrom) {
@@ -55,22 +71,17 @@ class TransactionController extends Controller
         });
     }
 
-    /**
-     * @param String $value
-     * @return mixed
-     */
     private function getUserByDocumentValue(string $value)
     {
         return User::where('document_value', '=', $value)->first();
     }
 
     /**
-     * @param $userFrom
-     * @param $userTo
-     * @param int $amount
+     * Valid some rules, if request it's valid, returns a boolean == false
+     *
      * @return false|Response
      */
-    private function userRules($userFrom, $userTo, int $amount)
+    private function isInvalidRequest($userFrom, $userTo, int $amount)
     {
         if (empty($userFrom))
             return $this->response('Payer not exist', [], 400);
@@ -87,12 +98,6 @@ class TransactionController extends Controller
         return false;
     }
 
-    /**
-     * @param User $userFrom
-     * @param User $userTo
-     * @param Request $request
-     * @return array
-     */
     private function convertTransaction(User $userFrom, User $userTo, Request $request): array
     {
         $transactionFromId = Uuid::uuid4();
@@ -115,10 +120,6 @@ class TransactionController extends Controller
         return [$transactionFrom, $transactionTo];
     }
 
-    /**
-     * @param Request $request
-     * @return \Illuminate\Contracts\Validation\Validator
-     */
     private function validateRequestBody(Request $request): \Illuminate\Contracts\Validation\Validator
     {
         return Validator::make($request->all(), [
@@ -126,42 +127,5 @@ class TransactionController extends Controller
             'payee' => 'required|string|between:11,14',
             'amount' => 'required|integer|min:1'
         ]);
-    }
-
-
-    public function store(Request $request)
-    {
-        Log::info('Creating a new transaction');
-
-        $validator = $this->validateRequestBody($request);
-
-        if ($validator->fails())
-            return $this->response('', $validator->errors()->toArray(), 400);
-
-        try {
-            $userFrom = $this->getUserByDocumentValue($request['payer']);
-            $userTo = $this->getUserByDocumentValue($request['payee']);
-
-            $rules = $this->userRules($userFrom, $userTo, $request['amount']);
-
-            if ($rules)
-                return $rules;
-
-            list($transactionFrom, $transactionTo) = $this->convertTransaction($userFrom, $userTo, $request);
-
-            $userFrom->wallet->amount -= $transactionFrom->amount;
-
-            $this->saveAll($transactionFrom, $transactionTo, $userFrom);
-
-            $this->publish('mars-authorize_transaction', $transactionFrom->toArray());
-
-            Log::info('TransactionFrom ' . $transactionFrom->id . ' was created');
-
-            return $this->response('Success', $transactionFrom->toArray(), 201);
-        } catch (Throwable $e) {
-            Log::error("Error trying create a new transaction. MESSAGE: " . $e->getMessage(), [$e->getTraceAsString()]);
-
-            return $this->response('Internal server error' . $e->getMessage(), [], 500);
-        }
     }
 }

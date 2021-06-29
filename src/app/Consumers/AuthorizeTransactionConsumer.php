@@ -32,7 +32,7 @@ class AuthorizeTransactionConsumer extends Consumer
 
         if (!empty($messages->get('Messages'))) {
             foreach ($messages->get('Messages') as $index => $message) {
-                $transactionFrom = $this->validAndGetBodyMessage($message['Body']);
+                $transactionFrom = $this->validAndGetBodyMessage($message);
                 $messageId = $message['MessageId'];
 
                 try {
@@ -64,7 +64,7 @@ class AuthorizeTransactionConsumer extends Consumer
 
                     Log::info("Transaction " . $transactionFrom->id . " was not authorized");
                 } catch (Throwable $e) {
-                    Log::error("Error trying process transaction " . $transactionFrom->id . ". " . $e->getMessage(), [$e->getTraceAsString()]);
+                    Log::error("Error trying process transaction " . $transactionFrom->id . ". " . $e->getTraceAsString());
 
                     $this->errorFlow($transactionFrom, ["error" => $e->getMessage()], $messageId, $sqsHelper, $messages, $index);
 
@@ -91,7 +91,7 @@ class AuthorizeTransactionConsumer extends Consumer
         $this->notifyQueueAndRemoveMessage($queueToSend, Queue::MARS_AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
     }
 
-    private function convertEvent(string $transactionId, array $payload, string $messageId, string $type)
+    private function convertEvent(string $transactionId, array $payload, string $messageId, string $type): Event
     {
         $event = new Event();
         $event->id = Uuid::uuid4();
@@ -111,6 +111,9 @@ class AuthorizeTransactionConsumer extends Consumer
         });
     }
 
+    /**
+     * @throws Throwable
+     */
     private function errorFlow(TransactionFrom $transactionFrom, array $message, $messageId, SqsHelper $sqsHelper, Result $messages, $index): Event
     {
         $eventAuthorization = $this->convertEvent($transactionFrom->id, $message, $messageId, EventType::ERROR);
@@ -122,6 +125,9 @@ class AuthorizeTransactionConsumer extends Consumer
         Log::info("Transaction " . $transactionFrom->id . " was not authorized");
     }
 
+    /**
+     * @throws Throwable
+     */
     private function authorizedFlow(TransactionFrom $transactionFrom, Response $response, $messageId, SqsHelper $sqsHelper, Result $messages, $index): void
     {
         $eventAuthorization = $this->convertEvent($transactionFrom->id, json_decode($response->body(), true), $messageId, EventType::AUTHORIZED);
@@ -133,6 +139,9 @@ class AuthorizeTransactionConsumer extends Consumer
         Log::info("Transaction " . $transactionFrom->id . " was authorized");
     }
 
+    /**
+     * @throws Throwable
+     */
     private function notAuthorizedFlow(TransactionFrom $transactionFrom, Response $response, $messageId, SqsHelper $sqsHelper, Result $messages, $index): void
     {
         $eventNotAuthorization = $this->convertEvent($transactionFrom->id, json_decode($response->body(), true), $messageId, EventType::NOT_AUTHORIZED);

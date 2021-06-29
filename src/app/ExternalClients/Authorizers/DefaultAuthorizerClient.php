@@ -20,7 +20,7 @@ class DefaultAuthorizerClient implements AuthorizerInterface
         try {
             return Http::get(env('DEFAULT_AUTHORIZER_URL'));
         } catch (Throwable $e) {
-            Log::error("Error trying authorize transaction " . $transaction->getId(), [$e->getTraceAsString()]);
+            Log::error("Error trying authorize transaction " . $transaction->getId() . ". ".$e->getTraceAsString());
 
             throw $e;
         }

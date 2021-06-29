@@ -20,7 +20,7 @@ class DefaultNotifierClient implements NotifierInterface
         try {
             return Http::get(env('DEFAULT_NOTIFIER_URL'));
         } catch (Throwable $e) {
-            Log::error("Error trying authorize transaction " . $transaction->getId(), [$e->getTraceAsString()]);
+            Log::error("Error trying notify transaction " . $transaction->getId() . ". ".$e->getTraceAsString());
 
             throw $e;
         }

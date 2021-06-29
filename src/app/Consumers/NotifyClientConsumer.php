@@ -30,16 +30,15 @@ class NotifyClientConsumer extends Consumer
 
         if (!empty($messages->get('Messages'))) {
             foreach ($messages->get('Messages') as $index => $message) {
+                $transactionFrom = $this->validAndGetBodyMessage($message);
+
                 try {
-                    $transactionFrom = $this->validAndGetBodyMessage($message['Body']);
+                    $events = json_decode($transactionFrom->events);
 
-                    $types = array_map('type', $transactionFrom->events);
-
-                    if (in_array(EventType::NOTIFIED, $types)) {
-                        Log::error("Transaction . " . $transactionFrom->id . " is already processed");
-
+                    if (!empty($events) && !empty(array_filter($events, function ($var) {
+                            return $var->type == EventType::NOTIFIED;
+                        }))) {
                         $this->deleteMessage(Queue::MARS_NOTIFY_CLIENT, $sqsHelper, $messages, $index);
-
                         continue;
                     }
 
@@ -60,7 +59,7 @@ class NotifyClientConsumer extends Consumer
 
                     Log::info("Transaction " . $transactionFrom->id . " was authorized");
                 } catch (Throwable $e) {
-                    Log::error("Error trying process transaction " . $e->getMessage(), [$e->getTraceAsString()]);
+                    Log::error("Error trying process transaction " . $transactionFrom->id . ". " . $e->getTraceAsString());
 
                     continue;
                 }

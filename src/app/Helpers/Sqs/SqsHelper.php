@@ -39,7 +39,7 @@ class SqsHelper
                 'ReceiptHandle' => $result->get('Messages')[$index]['ReceiptHandle']
             ]);
         } catch (AwsException $e) {
-            Log::error("Error trying delete message from queue " . $queue, [$e->getTraceAsString()]);
+            Log::error("Error trying delete message from queue " . $queue . ". " .$e->getTraceAsString());
 
             throw $e;
         }

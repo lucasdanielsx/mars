@@ -27,8 +27,9 @@ class TransactionNotPaidConsumer extends Consumer
 
         if (!empty($messages->get('Messages'))) {
             foreach ($messages->get('Messages') as $index => $message) {
+                $transactionFrom = $this->validAndGetBodyMessage($message);
+
                 try {
-                    $transactionFrom = $this->validAndGetBodyMessage($message['Body']);
 
                     if ($transactionFrom->status == TransactionStatus::NOT_PAID) {
                         Log::error("Transaction . " . $transactionFrom->id . " is already processed");
@@ -47,7 +48,7 @@ class TransactionNotPaidConsumer extends Consumer
 
                     Log::info("Transaction " . $transactionFrom->id . " was processed");
                 } catch (Throwable $e) {
-                    Log::error("Error trying process transaction: " . $e->getMessage(), [$e->getTraceAsString()]);
+                    Log::error("Error trying process transaction " . $transactionFrom->id . ". " . $e->getTraceAsString());
 
                     continue;
                 }

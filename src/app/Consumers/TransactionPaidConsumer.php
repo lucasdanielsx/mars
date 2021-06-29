@@ -26,9 +26,9 @@ class TransactionPaidConsumer extends Consumer
         $messages = $this->getMessages(Queue::MARS_TRANSACTION_PAID, $sqsHelper);
         if (!empty($messages->get('Messages'))) {
             foreach ($messages->get('Messages') as $index => $message) {
-                try {
-                    $transactionFrom = $this->validAndGetBodyMessage($message['Body']);
+                $transactionFrom = $this->validAndGetBodyMessage($message);
 
+                try {
                     if ($transactionFrom->status == TransactionStatus::PAID) {
                         Log::error("Transaction " . $transactionFrom->id . " is already processed");
                         $this->notifyQueueAndRemoveMessage(Queue::MARS_NOTIFY_CLIENT, Queue::MARS_TRANSACTION_PAID, $sqsHelper, $transactionFrom, $messages, $index);
@@ -46,7 +46,7 @@ class TransactionPaidConsumer extends Consumer
 
                     Log::info("Transaction " . $transactionFrom->id . " was processed");
                 } catch (Throwable $e) {
-                    Log::error("Error trying process transaction: " . $e->getMessage(), [$e->getTraceAsString()]);
+                    Log::error("Error trying process transaction " . $transactionFrom->id . ". " . $e->getTraceAsString());
 
                     continue;
                 }

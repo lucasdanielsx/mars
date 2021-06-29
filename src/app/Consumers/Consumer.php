@@ -2,11 +2,11 @@
 
 namespace App\Consumers;
 
+use App\Exceptions\TransactionNotFoundException;
 use App\Helpers\Sqs\SqsHelper;
 use App\Models\TransactionFrom;
 use Aws\Result;
 use Illuminate\Support\Facades\Log;
-use RuntimeException;
 use Throwable;
 
 abstract class Consumer
@@ -14,29 +14,22 @@ abstract class Consumer
     abstract function process();
 
     /**
-     * @param $body
-     * @return TransactionFrom
+     * @throws TransactionNotFoundException
      */
     protected function validAndGetBodyMessage($body): TransactionFrom
     {
-        $body = new TransactionFrom(json_decode($body, true));
+        $body = new TransactionFrom(json_decode($body['Body'], true));
 
         $transactionFrom = TransactionFrom::where('id', $body->id)->first();
 
         if (empty($transactionFrom)) {
-            throw new RuntimeException("Transaction . " . $body->id . " not found");
+            throw new TransactionNotFoundException("Transaction . " . $body->id . " not found");
         }
 
         return $transactionFrom;
     }
 
     /**
-     * @param string $queueToSend
-     * @param string $queueToDelete
-     * @param SqsHelper $sqsHelper
-     * @param TransactionFrom $transactionFrom
-     * @param Result $messages
-     * @param $index
      * @throws Throwable
      */
     protected function notifyQueueAndRemoveMessage(string $queueToSend, string $queueToDelete, SqsHelper $sqsHelper, TransactionFrom $transactionFrom, Result $messages, $index): void
@@ -52,9 +45,6 @@ abstract class Consumer
     }
 
     /**
-     * @param String $queue
-     * @param SqsHelper $sqsHelper
-     * @return Result
      * @throws Throwable
      */
     protected function getMessages(string $queue, SqsHelper $sqsHelper): Result
@@ -69,10 +59,6 @@ abstract class Consumer
     }
 
     /**
-     * @param String $queue
-     * @param SqsHelper $sqsHelper
-     * @param Result $messages
-     * @param int $index
      * @throws Throwable
      */
     protected function deleteMessage(string $queue, SqsHelper $sqsHelper, Result $messages, int $index): void
@@ -87,9 +73,6 @@ abstract class Consumer
     }
 
     /**
-     * @param String $queue
-     * @param SqsHelper $sqsHelper
-     * @param TransactionFrom $transactionFrom
      * @throws Throwable
      */
     protected function sendMessage(string $queue, SqsHelper $sqsHelper, TransactionFrom $transactionFrom): void
