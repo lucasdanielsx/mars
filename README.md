@@ -4,7 +4,7 @@ A simple Laravel application
 
 ## Pre requirements
 
-- PHP 7.2 or higher
+- PHP 7.2 or later
 - Laravel 8 
 - docker
 - docker-compose
