@@ -4,10 +4,10 @@ namespace App\Helpers\Enums;
 
 abstract class EventType extends EnumBase
 {
-    const TRANSACTION_AUTHORIZED = 'transaction_authorized';
-    const TRANSACTION_NOT_AUTHORIZED = 'transaction_not_authorized';
-    const TRANSACTION_PAID = 'transaction_paid';
-    const TRANSACTION_NOT_PAID = 'transaction_not_paid';
-    const TRANSACTION_NOTIFIED = 'transaction_notified';
-    const TRANSACTION_ERROR = 'transaction_error';
+    const AUTHORIZED = 'authorized';
+    const NOT_AUTHORIZED = 'not_authorized';
+    const PAID = 'paid';
+    const NOT_PAID = 'not_paid';
+    const NOTIFIED = 'notified';
+    const ERROR = 'error';
 }

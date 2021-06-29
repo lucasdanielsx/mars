@@ -5,7 +5,9 @@ namespace App\Consumers;
 use App\Helpers\Sqs\SqsHelper;
 use App\Models\TransactionFrom;
 use Aws\Result;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
+use Throwable;
 
 abstract class Consumer
 {
@@ -19,7 +21,7 @@ abstract class Consumer
     {
         $body = new TransactionFrom(json_decode($body, true));
 
-        $transactionFrom = TransactionFrom::find($body->id)->first();
+        $transactionFrom = TransactionFrom::where('id', $body->id)->first();
 
         if (empty($transactionFrom)) {
             throw new RuntimeException("Transaction . " . $body->id . " not found");
@@ -35,21 +37,35 @@ abstract class Consumer
      * @param TransactionFrom $transactionFrom
      * @param Result $messages
      * @param $index
+     * @throws Throwable
      */
     protected function notifyQueueAndRemoveMessage(string $queueToSend, string $queueToDelete, SqsHelper $sqsHelper, TransactionFrom $transactionFrom, Result $messages, $index): void
     {
-        $this->sendMessage($queueToSend, $sqsHelper, $transactionFrom);
-        $this->deleteMessage($queueToDelete, $sqsHelper, $messages, $index);
+        try {
+            $this->sendMessage($queueToSend, $sqsHelper, $transactionFrom);
+            $this->deleteMessage($queueToDelete, $sqsHelper, $messages, $index);
+        } catch (Throwable $e) {
+            Log::error("Error during notify queue " . $queueToSend . " and remove message from queue " . $queueToDelete . ". " . $e->getTraceAsString());
+
+            throw $e;
+        }
     }
 
     /**
      * @param String $queue
      * @param SqsHelper $sqsHelper
      * @return Result
+     * @throws Throwable
      */
     protected function getMessages(string $queue, SqsHelper $sqsHelper): Result
     {
-        return $sqsHelper->getMessages($queue);
+        try {
+            return $sqsHelper->getMessages($queue);
+        } catch (Throwable $e) {
+            Log::error("Error trying get messages from queue  " . $queue . ". " . $e->getTraceAsString());
+
+            throw $e;
+        }
     }
 
     /**
@@ -57,19 +73,33 @@ abstract class Consumer
      * @param SqsHelper $sqsHelper
      * @param Result $messages
      * @param int $index
+     * @throws Throwable
      */
     protected function deleteMessage(string $queue, SqsHelper $sqsHelper, Result $messages, int $index): void
     {
-        $sqsHelper->deleteMessage($queue, $messages, $index);
+        try {
+            $sqsHelper->deleteMessage($queue, $messages, $index);
+        } catch (Throwable $e) {
+            Log::error("Error delete message from queue  " . $queue . ". " . $e->getTraceAsString());
+
+            throw $e;
+        }
     }
 
     /**
      * @param String $queue
      * @param SqsHelper $sqsHelper
      * @param TransactionFrom $transactionFrom
+     * @throws Throwable
      */
     protected function sendMessage(string $queue, SqsHelper $sqsHelper, TransactionFrom $transactionFrom): void
     {
-        $sqsHelper->sendMessage($queue, $transactionFrom->toArray());
+        try {
+            $sqsHelper->sendMessage($queue, $transactionFrom->toArray());
+        } catch (Throwable $e) {
+            Log::error("Error trying send message to queue  " . $queue . ". " . $e->getTraceAsString());
+
+            throw $e;
+        }
     }
 }

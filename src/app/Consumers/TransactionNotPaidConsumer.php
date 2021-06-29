@@ -18,25 +18,12 @@ class TransactionNotPaidConsumer extends Consumer
         $this->process();
     }
 
-    /**
-     * @param TransactionFrom $transactionFrom
-     */
-    private function updateAll(TransactionFrom $transactionFrom): void
-    {
-        DB::transaction(function () use ($transactionFrom) {
-            $transactionFrom->update();
-            $transactionFrom->transaction->update();
-            $transactionFrom->transaction->wallet->update();
-            $transactionFrom->wallet->update();
-        });
-    }
-
     public function process()
     {
         Log::info("Starting " . self::class . " process");
 
         $sqsHelper = new SqsHelper(new SqsUsEast1Client());
-        $messages = $this->getMessages(Queue::TRANSACTION_NOT_PAID, $sqsHelper);
+        $messages = $this->getMessages(Queue::MARS_TRANSACTION_NOT_PAID, $sqsHelper);
 
         if (!empty($messages->get('Messages'))) {
             foreach ($messages->get('Messages') as $index => $message) {
@@ -45,8 +32,7 @@ class TransactionNotPaidConsumer extends Consumer
 
                     if ($transactionFrom->status == TransactionStatus::NOT_PAID) {
                         Log::error("Transaction . " . $transactionFrom->id . " is already processed");
-
-                        $this->notifyQueueAndRemoveMessage(Queue::NOTIFY_CLIENT, Queue::TRANSACTION_NOT_PAID, $sqsHelper, $transactionFrom, $messages, $index);
+                        $this->notifyQueueAndRemoveMessage(Queue::MARS_NOTIFY_CLIENT, Queue::MARS_TRANSACTION_NOT_PAID, $sqsHelper, $transactionFrom, $messages, $index);
 
                         continue;
                     }
@@ -57,7 +43,7 @@ class TransactionNotPaidConsumer extends Consumer
 
                     $this->updateAll($transactionFrom);
 
-                    $this->notifyQueueAndRemoveMessage(Queue::NOTIFY_CLIENT, Queue::TRANSACTION_NOT_PAID, $sqsHelper, $transactionFrom, $messages, $index);
+                    $this->notifyQueueAndRemoveMessage(Queue::MARS_NOTIFY_CLIENT, Queue::MARS_TRANSACTION_NOT_PAID, $sqsHelper, $transactionFrom, $messages, $index);
 
                     Log::info("Transaction " . $transactionFrom->id . " was processed");
                 } catch (Throwable $e) {
@@ -69,5 +55,15 @@ class TransactionNotPaidConsumer extends Consumer
         }
 
         Log::info("Finished " . self::class . " process");
+    }
+
+    private function updateAll(TransactionFrom $transactionFrom): void
+    {
+        DB::transaction(function () use ($transactionFrom) {
+            $transactionFrom->update();
+            $transactionFrom->transaction->update();
+            $transactionFrom->transaction->wallet->update();
+            $transactionFrom->wallet->update();
+        });
     }
 }

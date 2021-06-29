@@ -9,7 +9,8 @@ use App\Helpers\Sqs\SqsUsEast1Client;
 use App\ExternalClients\Authorizers\DefaultAuthorizerClient;
 use App\Models\Event;
 use App\Models\TransactionFrom;
-use Illuminate\Database\Eloquent\Model;
+use Aws\Result;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Ramsey\Uuid\Uuid;
@@ -22,10 +23,86 @@ class AuthorizeTransactionConsumer extends Consumer
         $this->process();
     }
 
+    public function process()
+    {
+        Log::info("Starting " . self::class . " process");
+
+        $sqsHelper = new SqsHelper(new SqsUsEast1Client());
+        $messages = $this->getMessages(Queue::MARS_AUTHORIZE_TRANSACTION, $sqsHelper);
+
+        if (!empty($messages->get('Messages'))) {
+            foreach ($messages->get('Messages') as $index => $message) {
+                $transactionFrom = $this->validAndGetBodyMessage($message['Body']);
+                $messageId = $message['MessageId'];
+
+                try {
+                    $events = json_decode($transactionFrom->events);
+
+                    if (!empty($events) && !empty(array_filter($events, function ($var) {
+                            return $var->type == EventType::AUTHORIZED;
+                        }))) {
+                        $this->transactionIsAlreadyProcessed(Queue::MARS_TRANSACTION_PAID, $transactionFrom, $sqsHelper, $messages, $index);
+                        continue;
+                    }
+
+                    if (!empty($events) && !empty(array_filter($events, function ($var) {
+                            return $var->type == EventType::NOT_AUTHORIZED;
+                        }))) {
+                        $this->transactionIsAlreadyProcessed(Queue::MARS_TRANSACTION_NOT_PAID, $transactionFrom, $sqsHelper, $messages, $index);
+                        continue;
+                    }
+
+                    $client = new DefaultAuthorizerClient();
+                    $response = $client->authorize($transactionFrom);
+
+                    if ($response->status() == 200) {
+                        $this->authorizedFlow($transactionFrom, $response, $messageId, $sqsHelper, $messages, $index);
+                        continue;
+                    }
+
+                    $this->notAuthorizedFlow($transactionFrom, $response, $messageId, $sqsHelper, $messages, $index);
+
+                    Log::info("Transaction " . $transactionFrom->id . " was not authorized");
+                } catch (Throwable $e) {
+                    Log::error("Error trying process transaction " . $transactionFrom->id . ". " . $e->getMessage(), [$e->getTraceAsString()]);
+
+                    $this->errorFlow($transactionFrom, ["error" => $e->getMessage()], $messageId, $sqsHelper, $messages, $index);
+
+                    continue;
+                }
+            }
+        }
+
+        Log::info("Finished " . self::class . " process");
+    }
+
     /**
-     * @param $eventAuthorization
-     * @param $event
+     * @param string $queueToSend
+     * @param TransactionFrom $transactionFrom
+     * @param SqsHelper $sqsHelper
+     * @param Result $messages
+     * @param $index
+     * @throws Throwable
      */
+    private function transactionIsAlreadyProcessed(string $queueToSend, TransactionFrom $transactionFrom, SqsHelper $sqsHelper, Result $messages, $index): void
+    {
+        Log::error("Transaction " . $transactionFrom->id . " is already processed");
+
+        $this->notifyQueueAndRemoveMessage($queueToSend, Queue::MARS_AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
+    }
+
+    private function convertEvent(string $transactionId, array $payload, string $messageId, string $type)
+    {
+        $event = new Event();
+        $event->id = Uuid::uuid4();
+        $event->fkTransactionFromId = $transactionId;
+        $event->payload = json_encode($payload);
+        $event->messageId = $messageId;
+        $event->type = $type;
+
+        return $event;
+    }
+
     private function saveAll($eventAuthorization, $event): void
     {
         DB::transaction(function () use ($eventAuthorization, $event) {
@@ -34,90 +111,34 @@ class AuthorizeTransactionConsumer extends Consumer
         });
     }
 
-    /**
-     * @param TransactionFrom $transaction
-     * @param array $payload
-     * @param int $statusCode
-     * @param string $messageId
-     * @return array
-     */
-    private function convertEvents(TransactionFrom $transaction, array $payload, int $statusCode, string $messageId)
+    private function errorFlow(TransactionFrom $transactionFrom, array $message, $messageId, SqsHelper $sqsHelper, Result $messages, $index): Event
     {
-        $eventAuthorization = new Event();
-        $eventAuthorization->id = Uuid::uuid4();
-        $eventAuthorization->fkTransactionFromId = $transaction->id;
-        $eventAuthorization->payload = json_encode($payload);
-        $eventAuthorization->messageId = $messageId;
+        $eventAuthorization = $this->convertEvent($transactionFrom->id, $message, $messageId, EventType::ERROR);
+        $event = $this->convertEvent($transactionFrom->id, [], $messageId, EventType::NOT_PAID);
 
-        $event = new Event();
-        $event->id = Uuid::uuid4();
-        $event->fkTransactionFromId = $transaction->id;
-        $event->payload = json_encode([]);
-        $event->messageId = $messageId;
+        $this->saveAll($eventAuthorization, $event);
+        $this->notifyQueueAndRemoveMessage(Queue::MARS_TRANSACTION_NOT_PAID, Queue::MARS_AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
 
-        if ($statusCode == 200) {
-            $eventAuthorization->type = EventType::TRANSACTION_AUTHORIZED;
-            $event->type = EventType::TRANSACTION_PAID;
-
-            return [$eventAuthorization, $event, Queue::TRANSACTION_PAID];
-        }
-
-        $eventAuthorization->type = EventType::TRANSACTION_NOT_AUTHORIZED;
-        $event->type = EventType::TRANSACTION_NOT_PAID;
-
-        return [$eventAuthorization, $event, Queue::TRANSACTION_NOT_PAID];
+        Log::info("Transaction " . $transactionFrom->id . " was not authorized");
     }
 
-    public function process()
+    private function authorizedFlow(TransactionFrom $transactionFrom, Response $response, $messageId, SqsHelper $sqsHelper, Result $messages, $index): void
     {
-        Log::info("Starting " . self::class . " process");
+        $eventAuthorization = $this->convertEvent($transactionFrom->id, json_decode($response->body(), true), $messageId, EventType::AUTHORIZED);
+        $event = $this->convertEvent($transactionFrom->id, [], $messageId, EventType::PAID);
 
-        $sqsHelper = new SqsHelper(new SqsUsEast1Client());
-        $messages = $this->getMessages(Queue::AUTHORIZE_TRANSACTION, $sqsHelper);
+        $this->saveAll($eventAuthorization, $event);
+        $this->notifyQueueAndRemoveMessage(Queue::MARS_TRANSACTION_PAID, Queue::MARS_AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
 
-        if (!empty($messages->get('Messages'))) {
-            foreach ($messages->get('Messages') as $index => $message) {
-                $transactionFrom = $this->validAndGetBodyMessage($message['Body']);
+        Log::info("Transaction " . $transactionFrom->id . " was authorized");
+    }
 
-                try {
-                    $types = array_map('type', $transactionFrom->events);
+    private function notAuthorizedFlow(TransactionFrom $transactionFrom, Response $response, $messageId, SqsHelper $sqsHelper, Result $messages, $index): void
+    {
+        $eventNotAuthorization = $this->convertEvent($transactionFrom->id, json_decode($response->body(), true), $messageId, EventType::NOT_AUTHORIZED);
+        $event = $this->convertEvent($transactionFrom->id, [], $messageId, EventType::PAID);
 
-                    if (in_array(EventType::TRANSACTION_AUTHORIZED, $types)) {
-                        Log::error("Transaction . " . $transactionFrom->id . " is already processed");
-
-                        $this->notifyQueueAndRemoveMessage(Queue::TRANSACTION_PAID, Queue::AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
-
-                        continue;
-                    }
-
-                    if (in_array(EventType::TRANSACTION_NOT_AUTHORIZED, $types)) {
-                        Log::error("Transaction . " . $transactionFrom->id . " is already processed");
-
-                        $this->notifyQueueAndRemoveMessage(Queue::TRANSACTION_NOT_PAID, Queue::AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
-
-                        continue;
-                    }
-
-                    $client = new DefaultAuthorizerClient();
-                    $response = $client->authorize($transactionFrom);
-
-                    list($eventAuthorization, $event, $queue) = $this->convertEvents($transactionFrom, json_decode($response->body(), true), $response->status(), $message['MessageId']);
-
-                    $this->saveAll($eventAuthorization, $event);
-
-                    $this->notifyQueueAndRemoveMessage($queue, Queue::AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
-
-                    Log::info("Transaction " . $transactionFrom->id . " was authorized");
-                } catch (Throwable $e) {
-                    Log::error("Error trying process transaction " . $e->getMessage(), [$e->getTraceAsString()]);
-
-                    $this->notifyQueueAndRemoveMessage(Queue::TRANSACTION_NOT_PAID, Queue::AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
-
-                    continue;
-                }
-            }
-        }
-
-        Log::info("Finished " . self::class . " process");
+        $this->saveAll($eventNotAuthorization, $event);
+        $this->notifyQueueAndRemoveMessage(Queue::MARS_TRANSACTION_NOT_PAID, Queue::MARS_AUTHORIZE_TRANSACTION, $sqsHelper, $transactionFrom, $messages, $index);
     }
 }
